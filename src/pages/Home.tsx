@@ -110,6 +110,8 @@ export function Home() {
   });
   const mapRef = useRef<MapRef | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const shouldFocusNearestRef = useRef(true);
+  const hasUserExploredMapRef = useRef(false);
 
   function requestDeviceGpsLocation() {
     if (!navigator.geolocation) {
@@ -123,16 +125,12 @@ export function Home() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocationError(null);
+        shouldFocusNearestRef.current = true;
+        hasUserExploredMapRef.current = false;
         setUserLocation({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         });
-        setViewState((current) => ({
-          ...current,
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          zoom: current.zoom < 14.5 ? 14.5 : current.zoom,
-        }));
         setIsLocating(false);
       },
       (error) => {
@@ -173,9 +171,9 @@ export function Home() {
 
   async function loadHomeData(
     location: { lat: number; lng: number },
-    options: { preserveSelection?: boolean } = {},
+    options: { preserveSelection?: boolean; focusNearest?: boolean } = {},
   ) {
-    const { preserveSelection = false } = options;
+    const { preserveSelection = false, focusNearest = false } = options;
     setLoading(true);
     try {
       const state = await runSync(false);
@@ -184,14 +182,27 @@ export function Home() {
         api.getNearbyParishes(location.lat, location.lng, 10, 20),
         api.getUpcomingMasses(location.lat, location.lng, 10, 168, 20),
       ]);
-      setNearbyChurches(nearbyRes.data || []);
+      const nearestChurch = nearbyRes.data?.[0] ?? null;
+      setNearbyChurches(focusNearest && nearestChurch ? [nearestChurch] : nearbyRes.data || []);
       setListItems(upcomingRes.data || []);
       setSelectedChurch((current) => {
+        if (focusNearest) return nearestChurch;
         if (preserveSelection && current && nearbyRes.data?.some((church) => church.id === current.id)) {
           return current;
         }
         return nearbyRes.data?.[0] ?? null;
       });
+      if (focusNearest && nearestChurch) {
+        const midpointLat = (location.lat + nearestChurch.latitude) / 2;
+        const midpointLng = (location.lng + nearestChurch.longitude) / 2;
+        setViewState((current) => ({
+          ...current,
+          latitude: midpointLat,
+          longitude: midpointLng,
+          zoom: 18,
+        }));
+        setSheetMode('collapsed');
+      }
       setIsSearchMode(false);
     } catch (error) {
       console.error('Failed to fetch home data:', error);
@@ -210,6 +221,8 @@ export function Home() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocationError(null);
+        shouldFocusNearestRef.current = true;
+        hasUserExploredMapRef.current = false;
         setUserLocation({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -218,6 +231,8 @@ export function Home() {
       (error) => {
         console.warn('Geolocation error:', error);
         setLocationError('無法取得定位，將使用台北車站作為預設位置');
+        shouldFocusNearestRef.current = true;
+        hasUserExploredMapRef.current = false;
         setUserLocation(FALLBACK_LOCATION);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
@@ -226,7 +241,9 @@ export function Home() {
 
   useEffect(() => {
     if (!userLocation) return;
-    loadHomeData(userLocation);
+    const focusNearest = shouldFocusNearestRef.current;
+    shouldFocusNearestRef.current = false;
+    loadHomeData(userLocation, { focusNearest });
   }, [userLocation]);
 
   useEffect(() => {
@@ -349,7 +366,7 @@ export function Home() {
   }
 
   async function refreshChurchesInViewport() {
-    if (!mapRef.current || isSearchMode) return;
+    if (!mapRef.current || isSearchMode || !hasUserExploredMapRef.current) return;
     const bounds = mapRef.current.getBounds();
     if (!bounds) return;
 
@@ -415,6 +432,11 @@ export function Home() {
     }
 
     setSheetMode((current) => current);
+  }
+
+  function handleUserMapExplore() {
+    if (isSearchMode) return;
+    hasUserExploredMapRef.current = true;
   }
 
   return (
@@ -483,6 +505,8 @@ export function Home() {
             mapLib={maplibregl}
             {...viewState}
             onMove={(event: ViewStateChangeEvent) => setViewState(event.viewState)}
+            onDragStart={handleUserMapExplore}
+            onZoomStart={handleUserMapExplore}
             onMoveEnd={refreshChurchesInViewport}
             minZoom={5.2}
             maxZoom={18}
