@@ -12,6 +12,8 @@ import type {
   CollectionResponse,
   OfflineSyncState,
   ParishDetail,
+  ParishReport,
+  ParishReportPayload,
   ParishSummary,
   SingleResponse,
   UpcomingMass,
@@ -22,6 +24,9 @@ export type {
   OfflineSyncState,
   ParishDetail,
   ParishPhoto,
+  ParishReport,
+  ParishReportPayload,
+  ParishReportType,
   ParishSummary,
   Priest,
   MassTime,
@@ -72,6 +77,14 @@ async function tryFetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch ${url}`);
   return res.json();
+}
+
+async function parseJsonSafely(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
 }
 
 function buildMockUpcomingMasses(): UpcomingMass[] {
@@ -236,5 +249,51 @@ export const api = {
 
     const fallback = await this.searchParishes(query, 1, limit);
     return { data: fallback.data.slice(0, limit) };
+  },
+
+  async submitParishReport(
+    parishId: string | number,
+    payload: ParishReportPayload,
+  ): Promise<SingleResponse<ParishReport>> {
+    const formData = new FormData();
+    formData.append('report_type', payload.reportType);
+
+    if (payload.reporterName?.trim()) formData.append('reporter_name', payload.reporterName.trim());
+    if (payload.reporterEmail?.trim()) formData.append('reporter_email', payload.reporterEmail.trim());
+    if (payload.reporterPhone?.trim()) formData.append('reporter_phone', payload.reporterPhone.trim());
+    if (payload.description?.trim()) formData.append('description', payload.description.trim());
+
+    payload.photos?.forEach((photo) => {
+      formData.append('photos[]', photo);
+    });
+
+    const response = await fetch(`${BASE_URL}/parishes/${parishId}/reports`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+      },
+      body: formData,
+    });
+
+    if (response.ok) {
+      return response.json();
+    }
+
+    const errorBody = await parseJsonSafely(response);
+
+    if (response.status === 429) {
+      throw new Error(errorBody?.message || '回報次數已達上限，請稍後再試。');
+    }
+
+    if (response.status === 404) {
+      throw new Error(errorBody?.message || '找不到指定的教堂。');
+    }
+
+    if (response.status === 422) {
+      const firstError = Object.values(errorBody?.errors ?? {})[0];
+      throw new Error(Array.isArray(firstError) ? String(firstError[0]) : errorBody?.message || '欄位驗證失敗。');
+    }
+
+    throw new Error(errorBody?.message || '送出回報失敗，請稍後再試。');
   },
 };

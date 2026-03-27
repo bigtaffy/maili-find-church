@@ -89,3 +89,35 @@ export type OfflineSyncState = {
   lastSyncAt: string | null;
   error?: string | null;
 };
+
+export type ParishReportType =
+  | 'wrong_address'
+  | 'wrong_mass_time'
+  | 'wrong_phone'
+  | 'wrong_website'
+  | 'closed_permanently'
+  | 'closed_temporarily'
+  | 'other';
+
+export type ParishReportPhoto = {
+  url: string;
+  original_name: string;
+};
+
+export type ParishReport = {
+  id: number;
+  parish_id: number;
+  report_type: ParishReportType;
+  status: 'pending' | 'reviewed' | 'resolved' | 'rejected' | string;
+  photos: ParishReportPhoto[];
+  created_at: string;
+};
+
+export type ParishReportPayload = {
+  reportType: ParishReportType;
+  reporterName?: string;
+  reporterEmail?: string;
+  reporterPhone?: string;
+  description?: string;
+  photos?: File[];
+};
