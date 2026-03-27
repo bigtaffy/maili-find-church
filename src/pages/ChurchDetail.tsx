@@ -18,6 +18,7 @@ import {
 import maplibregl from 'maplibre-gl';
 import MapGL, { Marker } from 'react-map-gl/maplibre';
 import { api, type ParishDetail, type UpcomingMass } from '@/lib/api';
+import { getMassDisplayTitle, sortMassTimes } from '@/lib/utils';
 import { useFavorites } from '@/lib/useFavorites';
 
 const FALLBACK_CHURCH_IMAGE =
@@ -130,9 +131,11 @@ export function ChurchDetail() {
 
   const isFav = isFavorite(church.id);
   const mainImage = church.photos?.[0]?.image_url || FALLBACK_CHURCH_IMAGE;
-  const sundayMasses = church.mass_times?.filter((m) => m.mass_type?.type_code === 'sunday') || [];
-  const weekdayMasses = church.mass_times?.filter((m) => m.mass_type?.type_code === 'weekday') || [];
-  const otherMasses = church.mass_times?.filter((m) => !['sunday', 'weekday'].includes(m.mass_type?.type_code || '')) || [];
+  const sundayMasses = sortMassTimes(church.mass_times?.filter((m) => m.mass_type?.type_code === 'sunday') || []);
+  const weekdayMasses = sortMassTimes(church.mass_times?.filter((m) => m.mass_type?.type_code === 'weekday') || []);
+  const otherMasses = sortMassTimes(
+    church.mass_times?.filter((m) => !['sunday', 'weekday'].includes(m.mass_type?.type_code || '')) || [],
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -168,7 +171,7 @@ export function ChurchDetail() {
             {nextMass?.mass_time ? (
               <>
                 <p className="text-base font-semibold text-slate-900">
-                  {nextMass.mass_time.human_readable || '近期彌撒'}
+                  {getMassDisplayTitle(nextMass.mass_time)}
                 </p>
                 <p className="text-sm text-slate-600 mt-1">
                   {formatMassCountdown(nextMass.minutes_away) || '近期即將開始'}
@@ -226,7 +229,7 @@ export function ChurchDetail() {
               <h3 className="font-bold text-gray-900 mb-1">平日彌撒</h3>
               {weekdayMasses.map((m) => (
                 <p key={m.id} className="text-sm text-gray-500">
-                  {m.human_readable} {m.label ? `(${m.label})` : ''}
+                  {getMassDisplayTitle(m)} {m.label ? `(${m.label})` : ''}
                 </p>
               ))}
             </div>
@@ -237,7 +240,7 @@ export function ChurchDetail() {
               <h3 className="font-bold text-gray-900 mb-1">主日彌撒</h3>
               {sundayMasses.map((m) => (
                 <p key={m.id} className="text-sm text-gray-500">
-                  {m.human_readable} {m.label ? `(${m.label})` : ''}
+                  {getMassDisplayTitle(m)} {m.label ? `(${m.label})` : ''}
                 </p>
               ))}
             </div>
@@ -248,7 +251,7 @@ export function ChurchDetail() {
               <h3 className="font-bold text-gray-900 mb-1">其他彌撒</h3>
               {otherMasses.map((m) => (
                 <p key={m.id} className="text-sm text-gray-500">
-                  {m.human_readable} {m.label ? `(${m.label})` : ''}
+                  {getMassDisplayTitle(m)} {m.label ? `(${m.label})` : ''}
                 </p>
               ))}
             </div>

@@ -6,6 +6,7 @@ import Map, { Marker, NavigationControl, type MapRef, type ViewStateChangeEvent 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppView } from '@/components/Layout';
 import { api, type OfflineSyncState, type ParishDetail, type ParishSummary, type UpcomingMass } from '@/lib/api';
+import { getMassDisplayTitle, sortMassTimes } from '@/lib/utils';
 
 const FALLBACK_LOCATION = { lat: 25.0478, lng: 121.517 };
 const FALLBACK_CHURCH_IMAGE =
@@ -168,7 +169,11 @@ export function Home() {
     return () => window.clearTimeout(timeoutId);
   }, [syncState?.version, syncState?.source, syncState?.isStale, syncState?.error]);
 
-  async function loadHomeData(location: { lat: number; lng: number }) {
+  async function loadHomeData(
+    location: { lat: number; lng: number },
+    options: { preserveSelection?: boolean } = {},
+  ) {
+    const { preserveSelection = false } = options;
     setLoading(true);
     try {
       const state = await runSync(false);
@@ -179,7 +184,12 @@ export function Home() {
       ]);
       setNearbyChurches(nearbyRes.data || []);
       setListItems(upcomingRes.data || []);
-      setSelectedChurch((current) => current ?? nearbyRes.data?.[0] ?? null);
+      setSelectedChurch((current) => {
+        if (preserveSelection && current && nearbyRes.data?.some((church) => church.id === current.id)) {
+          return current;
+        }
+        return nearbyRes.data?.[0] ?? null;
+      });
       setIsSearchMode(false);
     } catch (error) {
       console.error('Failed to fetch home data:', error);
@@ -378,8 +388,12 @@ export function Home() {
   }, [mapCenter.latitude, mapCenter.longitude]);
 
   const selectedChurchMassTimes = selectedChurchDetail?.mass_times ?? [];
-  const selectedChurchSundayMasses = selectedChurchMassTimes.filter((item) => item.mass_type?.type_code === 'sunday').slice(0, 4);
-  const selectedChurchWeekdayMasses = selectedChurchMassTimes.filter((item) => item.mass_type?.type_code === 'weekday').slice(0, 4);
+  const selectedChurchSundayMasses = sortMassTimes(
+    selectedChurchMassTimes.filter((item) => item.mass_type?.type_code === 'sunday'),
+  ).slice(0, 4);
+  const selectedChurchWeekdayMasses = sortMassTimes(
+    selectedChurchMassTimes.filter((item) => item.mass_type?.type_code === 'weekday'),
+  ).slice(0, 4);
 
   function handleSheetDragEnd(_: MouseEvent | TouchEvent | PointerEvent, info: { offset: { y: number }; velocity: { y: number } }) {
     if (info.offset.y > 120 || info.velocity.y > 700) {
@@ -601,7 +615,7 @@ export function Home() {
                         {selectedChurchUpcomingMass?.mass_time ? (
                           <div>
                             <p className="text-sm font-medium text-slate-900 line-clamp-2 leading-snug">
-                              {selectedChurchUpcomingMass.mass_time.human_readable || '近期彌撒'}
+                              {getMassDisplayTitle(selectedChurchUpcomingMass.mass_time)}
                             </p>
                             <p className="text-xs text-slate-600 line-clamp-2 leading-snug">
                               {formatMassCountdown(selectedChurchUpcomingMass.minutes_away) || '近期開放中'}
@@ -649,7 +663,7 @@ export function Home() {
                               <div className="space-y-1">
                                 {selectedChurchWeekdayMasses.map((mass) => (
                                   <p key={mass.id} className="text-sm text-slate-700">
-                                    {mass.human_readable}
+                                    {getMassDisplayTitle(mass)}
                                     {mass.label ? ` ・ ${mass.label}` : ''}
                                   </p>
                                 ))}
@@ -662,7 +676,7 @@ export function Home() {
                               <div className="space-y-1">
                                 {selectedChurchSundayMasses.map((mass) => (
                                   <p key={mass.id} className="text-sm text-slate-700">
-                                    {mass.human_readable}
+                                    {getMassDisplayTitle(mass)}
                                     {mass.label ? ` ・ ${mass.label}` : ''}
                                   </p>
                                 ))}

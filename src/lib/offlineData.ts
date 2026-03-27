@@ -1,5 +1,5 @@
 import Fuse from 'fuse.js';
-import { RRule } from 'rrule';
+import { RRule, datetime } from 'rrule';
 import type { MassTime, OfflineSyncState, ParishDetail, ParishPhoto, ParishSummary, Priest, UpcomingMass } from './types';
 
 const SYNC_VERSION_URL = 'https://maili-news-scrapper.chihhe.dev/api/v1/sync/version';
@@ -272,11 +272,27 @@ function getNextOccurrence(rruleString?: string | null, now = new Date()) {
 
   try {
     const options = RRule.parseString(rruleString);
-    const dtstart = new Date(now);
-    dtstart.setMonth(0, 1);
-    dtstart.setHours(0, 0, 0, 0);
+    const dtstart = datetime(now.getFullYear(), 1, 1, 0, 0, 0);
+    const floatingNow = datetime(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      now.getDate(),
+      now.getHours(),
+      now.getMinutes(),
+      now.getSeconds(),
+    );
     const rule = new RRule({ ...options, dtstart });
-    return rule.after(now, true);
+    const nextOccurrence = rule.after(floatingNow, true);
+    if (!nextOccurrence) return null;
+
+    return new Date(
+      nextOccurrence.getUTCFullYear(),
+      nextOccurrence.getUTCMonth(),
+      nextOccurrence.getUTCDate(),
+      nextOccurrence.getUTCHours(),
+      nextOccurrence.getUTCMinutes(),
+      nextOccurrence.getUTCSeconds(),
+    );
   } catch (error) {
     console.warn('Failed to resolve next occurrence:', error);
     return null;

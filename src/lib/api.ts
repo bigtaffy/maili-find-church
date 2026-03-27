@@ -173,15 +173,16 @@ export const api = {
   async getParishDetail(id: string | number): Promise<SingleResponse<ParishDetail>> {
     await syncOfflineData();
 
+    if (hasOfflineSnapshot()) {
+      const local = getParishDetailOffline(id);
+      if (local) return { data: local };
+    }
+
     try {
       const json = await tryFetchJson<SingleResponse<ParishDetail>>(`${BASE_URL}/parishes/${id}`);
       return json;
     } catch (error) {
       console.warn('Remote parish detail failed, trying offline snapshot:', error);
-      if (hasOfflineSnapshot()) {
-        const local = getParishDetailOffline(id);
-        if (local) return { data: local };
-      }
 
       const church = MOCK_CHURCHES.find((item) => item.id.toString() === id.toString()) ?? MOCK_CHURCHES[0];
       return { data: church };
