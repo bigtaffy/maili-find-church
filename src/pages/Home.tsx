@@ -109,6 +109,7 @@ export function Home() {
     zoom: 10.5,
   });
   const mapRef = useRef<MapRef | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   function requestDeviceGpsLocation() {
     if (!navigator.geolocation) {
@@ -321,6 +322,7 @@ export function Home() {
   function applySuggestion(parish: ParishSummary) {
     setSearchQuery(parish.name_zh);
     setSearchSuggestions([]);
+    searchInputRef.current?.blur();
     setNearbyChurches([parish]);
     setSelectedChurch(parish);
     setSheetMode('collapsed');
@@ -421,6 +423,7 @@ export function Home() {
         <form onSubmit={handleSearch} className="bg-white rounded-full shadow-md flex items-center px-4 py-3">
           <Search className="w-5 h-5 text-gray-400 mr-3" />
           <input
+            ref={searchInputRef}
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
