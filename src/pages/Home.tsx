@@ -193,14 +193,31 @@ export function Home() {
         return nearbyRes.data?.[0] ?? null;
       });
       if (focusNearest && nearestChurch) {
-        const midpointLat = (location.lat + nearestChurch.latitude) / 2;
-        const midpointLng = (location.lng + nearestChurch.longitude) / 2;
-        setViewState((current) => ({
-          ...current,
-          latitude: midpointLat,
-          longitude: midpointLng,
-          zoom: 18,
-        }));
+        const minLat = Math.min(location.lat, nearestChurch.latitude);
+        const maxLat = Math.max(location.lat, nearestChurch.latitude);
+        const minLng = Math.min(location.lng, nearestChurch.longitude);
+        const maxLng = Math.max(location.lng, nearestChurch.longitude);
+
+        if (mapRef.current) {
+          mapRef.current.fitBounds(
+            [
+              [minLng, minLat],
+              [maxLng, maxLat],
+            ],
+            {
+              padding: { top: 140, right: 48, bottom: 220, left: 48 },
+              maxZoom: 17,
+              duration: 600,
+            },
+          );
+        } else {
+          setViewState((current) => ({
+            ...current,
+            latitude: (location.lat + nearestChurch.latitude) / 2,
+            longitude: (location.lng + nearestChurch.longitude) / 2,
+            zoom: 16,
+          }));
+        }
         setSheetMode('collapsed');
       }
       setIsSearchMode(false);
