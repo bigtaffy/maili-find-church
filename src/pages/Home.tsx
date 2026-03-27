@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, ArrowRight, Navigation, Loader2, X, Clock3, CloudOff, Database, RefreshCw, MapPin, Phone, Globe, Church } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
-import Map, { Marker, NavigationControl, type MapRef, type ViewStateChangeEvent } from 'react-map-gl/maplibre';
+import Map, { Marker, type MapRef, type ViewStateChangeEvent } from 'react-map-gl/maplibre';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppView } from '@/components/Layout';
 import { api, type OfflineSyncState, type ParishDetail, type ParishSummary, type UpcomingMass } from '@/lib/api';
@@ -13,15 +13,16 @@ const FALLBACK_CHURCH_IMAGE =
   'https://images.unsplash.com/photo-1548625361-ec846e2e92c2?auto=format&fit=crop&q=80&w=1200';
 const OPEN_FREE_MAP_LIBERTY_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 const SHEET_HEIGHT = '74vh';
+const BOTTOM_NAV_OFFSET = 'calc(4.5rem + env(safe-area-inset-bottom, 0px))';
 const SHEET_TRANSLATE = {
   expanded: '0px',
   collapsed: 'calc(74vh - 184px)',
-  hidden: 'calc(74vh - 28px)',
+  hidden: 'calc(100% + 4rem + env(safe-area-inset-bottom, 0px))',
 } as const;
 const LOCATION_BUTTON_BOTTOM = {
-  expanded: '74vh',
-  collapsed: '184px',
-  hidden: '28px',
+  expanded: 'calc(74vh + 4.5rem + env(safe-area-inset-bottom, 0px))',
+  collapsed: 'calc(184px + 4.5rem + env(safe-area-inset-bottom, 0px))',
+  hidden: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))',
 } as const;
 const SHEET_SPRING = {
   type: 'spring' as const,
@@ -486,8 +487,6 @@ export function Home() {
             style={{ width: '100%', height: '100%' }}
             mapStyle={OPEN_FREE_MAP_LIBERTY_STYLE}
           >
-            <NavigationControl position="bottom-right" />
-
             <Marker longitude={userLocation.lng} latitude={userLocation.lat} anchor="center">
               <div className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 ring-4 ring-blue-200" />
             </Marker>
@@ -527,12 +526,12 @@ export function Home() {
               <>
                 <motion.button
                   type="button"
-                  initial={{ bottom: '0px', opacity: 0 }}
+                  initial={{ bottom: LOCATION_BUTTON_BOTTOM.hidden, opacity: 0 }}
                   animate={{ bottom: LOCATION_BUTTON_BOTTOM[sheetMode], opacity: 1 }}
-                  exit={{ bottom: '0px', opacity: 0 }}
+                  exit={{ bottom: LOCATION_BUTTON_BOTTOM.hidden, opacity: 0 }}
                   transition={SHEET_SPRING}
                   onClick={requestDeviceGpsLocation}
-                  className="absolute right-5 z-[1100] flex translate-y-1/2 items-center gap-2 rounded-full bg-white px-4 py-3 shadow-lg ring-1 ring-slate-200 active:bg-gray-50"
+                  className="absolute left-5 z-[1100] flex translate-y-1/2 items-center gap-2 rounded-full bg-white px-4 py-3 shadow-lg ring-1 ring-slate-200 active:bg-gray-50"
                 >
                   {isLocating ? (
                     <Loader2 className="w-5 h-5 text-gray-700 animate-spin" />
@@ -553,30 +552,19 @@ export function Home() {
                   dragMomentum={false}
                   onDragEnd={handleSheetDragEnd}
                   className="absolute bottom-0 left-0 right-0 z-[1000] rounded-t-3xl bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.1)]"
-                  style={{ height: SHEET_HEIGHT }}
+                  style={{ height: SHEET_HEIGHT, bottom: BOTTOM_NAV_OFFSET }}
                 >
-                  <div className={`relative h-full px-5 pb-6 ${sheetMode === 'expanded' ? 'overflow-y-auto pt-4' : 'overflow-hidden pt-4'}`}>
-
+                  <div className={`relative h-full px-5 pb-6 ${sheetMode === 'expanded' ? 'overflow-y-auto pt-5' : 'overflow-hidden pt-5'}`}>
                     <button
                       type="button"
-                      onClick={() =>
-                        setSheetMode((current) => {
-                          if (current === 'expanded') return 'collapsed';
-                        if (current === 'collapsed') return 'expanded';
-                        return 'collapsed';
-                        })
-                      }
-                    className="mx-auto mb-3 block w-16 rounded-full py-2 active:scale-95 transition-transform"
-                    aria-label="調整教堂資訊面板"
-                  >
-                    <motion.div
-                      animate={{ width: sheetMode === 'expanded' ? 56 : 48, opacity: sheetMode === 'hidden' ? 0.7 : 1 }}
-                      transition={{ duration: 0.18, ease: 'easeOut' }}
-                      className="mx-auto h-1.5 rounded-full bg-gray-300"
-                    />
-                  </button>
+                      onClick={() => setSheetMode('hidden')}
+                      className="absolute right-5 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-slate-500 shadow-sm ring-1 ring-slate-200 backdrop-blur active:bg-slate-50"
+                      aria-label="關閉教堂資訊"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
 
-                  <div className="relative overflow-hidden rounded-[28px] bg-white">
+                    <div className="relative overflow-hidden rounded-[28px] bg-white">
                     {sheetMode !== 'expanded' && (
                       <>
                         <img
@@ -635,13 +623,6 @@ export function Home() {
                           className="bg-blue-600 text-white px-5 py-2.5 rounded-full text-sm font-medium flex items-center gap-2 active:bg-blue-700 transition-colors"
                         >
                           查看詳情 <ArrowRight className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSheetMode('expanded')}
-                          className="text-sm font-medium text-slate-500 px-2 py-2"
-                        >
-                          展開
                         </button>
                       </div>
                     </div>

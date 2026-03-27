@@ -8,7 +8,7 @@ export function BottomNav({ currentView, onViewChange }: { currentView?: 'map' |
   const isHome = location.pathname === '/';
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-16 pb-safe z-50">
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-16 pb-safe z-[1300]">
       <div
         className={cn("flex flex-col items-center justify-center w-full h-full cursor-pointer", isHome ? "text-blue-600" : "text-gray-500")}
         onClick={() => {
