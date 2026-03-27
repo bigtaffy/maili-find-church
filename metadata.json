@@ -1,0 +1,5 @@
+{
+  "name": "麥力找教堂",
+  "description": "尋找附近的教堂、查看堂區資訊與規劃路線",
+  "requestFramePermissions": ["geolocation"]
+}
