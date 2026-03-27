@@ -18,7 +18,7 @@ import {
 import maplibregl from 'maplibre-gl';
 import MapGL, { Marker } from 'react-map-gl/maplibre';
 import { api, type ParishDetail, type UpcomingMass } from '@/lib/api';
-import { getMassDisplayTitle, sortMassTimes } from '@/lib/utils';
+import { getLiturgyDisplayTitle, getMassDisplayTitle, getMassSection, sortMassTimes } from '@/lib/utils';
 import { useFavorites } from '@/lib/useFavorites';
 
 const FALLBACK_CHURCH_IMAGE =
@@ -131,11 +131,10 @@ export function ChurchDetail() {
 
   const isFav = isFavorite(church.id);
   const mainImage = church.photos?.[0]?.image_url || FALLBACK_CHURCH_IMAGE;
-  const sundayMasses = sortMassTimes(church.mass_times?.filter((m) => m.mass_type?.type_code === 'sunday') || []);
-  const weekdayMasses = sortMassTimes(church.mass_times?.filter((m) => m.mass_type?.type_code === 'weekday') || []);
-  const otherMasses = sortMassTimes(
-    church.mass_times?.filter((m) => !['sunday', 'weekday'].includes(m.mass_type?.type_code || '')) || [],
-  );
+  const sundayMasses = sortMassTimes(church.mass_times?.filter((m) => getMassSection(m) === 'sunday') || []);
+  const weekdayMasses = sortMassTimes(church.mass_times?.filter((m) => getMassSection(m) === 'weekday') || []);
+  const specialMasses = sortMassTimes(church.mass_times?.filter((m) => getMassSection(m) === 'special') || []);
+  const liturgyItems = sortMassTimes(church.mass_times?.filter((m) => getMassSection(m) === 'liturgy') || []);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -246,12 +245,24 @@ export function ChurchDetail() {
             </div>
           )}
 
-          {otherMasses.length > 0 && (
+          {specialMasses.length > 0 && (
             <div>
-              <h3 className="font-bold text-gray-900 mb-1">其他彌撒</h3>
-              {otherMasses.map((m) => (
+              <h3 className="font-bold text-gray-900 mb-1">特殊彌撒</h3>
+              {specialMasses.map((m) => (
                 <p key={m.id} className="text-sm text-gray-500">
-                  {getMassDisplayTitle(m)} {m.label ? `(${m.label})` : ''}
+                  {m.label || m.remarks || m.mass_type?.name_zh ? `${m.label || m.remarks || m.mass_type?.name_zh}：` : ''}
+                  {getMassDisplayTitle(m)}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {liturgyItems.length > 0 && (
+            <div className={specialMasses.length > 0 ? 'mt-4' : ''}>
+              <h3 className="font-bold text-gray-900 mb-1">其他禮儀</h3>
+              {liturgyItems.map((m) => (
+                <p key={m.id} className="text-sm text-gray-500">
+                  {getLiturgyDisplayTitle(m)}：{getMassDisplayTitle(m)}
                 </p>
               ))}
             </div>

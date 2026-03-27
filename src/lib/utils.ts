@@ -79,3 +79,43 @@ export function getMassDisplayTitle(mass: MassTime) {
     return mass.human_readable || '彌撒時間';
   }
 }
+
+const liturgyKeywords = ['守聖時', '敬禮', '明供聖體', '聖體降福', '拜苦路', '玫瑰經', '聖母經', '朝拜', '晚禱', '早禱'];
+
+function getMassDescriptor(mass: MassTime) {
+  return [mass.label, mass.remarks, mass.mass_type?.name_zh]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .join(' ');
+}
+
+export function getMassSection(mass: MassTime): 'sunday' | 'weekday' | 'special' | 'liturgy' {
+  const typeCode = mass.mass_type?.type_code;
+  const descriptor = getMassDescriptor(mass);
+
+  if (typeCode === 'sunday') return 'sunday';
+  if (typeCode === 'weekday') return 'weekday';
+  if (typeCode === 'exposition') return 'liturgy';
+
+  if (liturgyKeywords.some((keyword) => descriptor.includes(keyword))) {
+    return 'liturgy';
+  }
+
+  return 'special';
+}
+
+export function getLiturgyDisplayTitle(mass: MassTime) {
+  const label = mass.label?.trim();
+  const remarks = mass.remarks?.trim();
+  const typeName = mass.mass_type?.name_zh?.trim();
+  const keywordTitle = [label, remarks].find((value): value is string =>
+    Boolean(value && liturgyKeywords.some((keyword) => value.includes(keyword))),
+  );
+
+  if (keywordTitle) return keywordTitle;
+  if (typeName && label && label !== typeName) return `${typeName}（${label}）`;
+  if (typeName && remarks && remarks !== typeName) return `${typeName}（${remarks}）`;
+
+  const explicitTitle = [label, remarks, typeName].find((value): value is string => Boolean(value));
+
+  return explicitTitle?.trim() || '其他禮儀';
+}

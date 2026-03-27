@@ -118,7 +118,7 @@ export function Home() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchSuggestions, setSearchSuggestions] = useState<ParishSummary[]>([]);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(FALLBACK_LOCATION);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [syncState, setSyncState] = useState<OfflineSyncState | null>(null);
@@ -256,8 +256,7 @@ export function Home() {
 
   useEffect(() => {
     if (!navigator.geolocation) {
-      setLocationError('您的裝置不支援定位功能，將使用台北車站作為預設位置');
-      setUserLocation(FALLBACK_LOCATION);
+      setLocationError('此裝置不支援定位，先顯示預設區域');
       return;
     }
 
@@ -273,12 +272,12 @@ export function Home() {
       },
       (error) => {
         console.warn('Geolocation error:', error);
-        setLocationError('無法取得定位，將使用台北車站作為預設位置');
+        setLocationError('無法取得定位，先顯示預設區域');
         shouldFocusNearestRef.current = true;
         hasUserExploredMapRef.current = false;
         setUserLocation(FALLBACK_LOCATION);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+      { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 },
     );
   }, []);
 
@@ -536,10 +535,10 @@ export function Home() {
         )}
       </div>
 
-      {loading || !userLocation ? (
+      {loading ? (
         <div className="h-full w-full flex flex-col items-center justify-center bg-gray-50 pt-20">
           <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-4" />
-          <p className="text-gray-500 text-sm">{!userLocation ? '正在取得您的位置...' : '載入中...'}</p>
+          <p className="text-gray-500 text-sm">載入附近教堂...</p>
         </div>
       ) : currentView === 'map' ? (
         <div className="h-full w-full relative">
