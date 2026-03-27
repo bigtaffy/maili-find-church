@@ -14,6 +14,11 @@ const FALLBACK_CHURCH_IMAGE =
 const OPEN_FREE_MAP_LIBERTY_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 const SHEET_HEIGHT = '74vh';
 const BOTTOM_NAV_OFFSET = 'calc(4.5rem + env(safe-area-inset-bottom, 0px))';
+const SEARCH_BAR_PADDING_TOP = 132;
+const SHEET_COLLAPSED_VISIBLE_HEIGHT = 184;
+const FOCUS_BOTTOM_PADDING = 300;
+const FOCUS_SIDE_PADDING = 56;
+const MIN_FOCUS_LAT_SPAN = 0.008;
 const SHEET_TRANSLATE = {
   expanded: '0px',
   collapsed: 'calc(74vh - 184px)',
@@ -47,6 +52,23 @@ function formatMassCountdown(minutesAway?: number | null) {
 
 function getChurchImage(detail: ParishDetail | null) {
   return detail?.photos?.[0]?.image_url || FALLBACK_CHURCH_IMAGE;
+}
+
+function getFocusBounds(
+  location: { lat: number; lng: number },
+  church: { latitude: number; longitude: number },
+) {
+  const centerLat = (location.lat + church.latitude) / 2;
+  const latSpan = Math.max(Math.abs(location.lat - church.latitude), MIN_FOCUS_LAT_SPAN);
+  const lngFloor = MIN_FOCUS_LAT_SPAN / Math.max(Math.cos((centerLat * Math.PI) / 180), 0.45);
+  const lngSpan = Math.max(Math.abs(location.lng - church.longitude), lngFloor);
+
+  return {
+    minLat: centerLat - latSpan / 2,
+    maxLat: centerLat + latSpan / 2,
+    minLng: (location.lng + church.longitude) / 2 - lngSpan / 2,
+    maxLng: (location.lng + church.longitude) / 2 + lngSpan / 2,
+  };
 }
 
 function SyncBadge({ syncState, onRefresh }: { syncState: OfflineSyncState | null; onRefresh: () => void }) {
@@ -193,10 +215,7 @@ export function Home() {
         return nearbyRes.data?.[0] ?? null;
       });
       if (focusNearest && nearestChurch) {
-        const minLat = Math.min(location.lat, nearestChurch.latitude);
-        const maxLat = Math.max(location.lat, nearestChurch.latitude);
-        const minLng = Math.min(location.lng, nearestChurch.longitude);
-        const maxLng = Math.max(location.lng, nearestChurch.longitude);
+        const { minLat, maxLat, minLng, maxLng } = getFocusBounds(location, nearestChurch);
 
         if (mapRef.current) {
           mapRef.current.fitBounds(
@@ -205,17 +224,24 @@ export function Home() {
               [maxLng, maxLat],
             ],
             {
-              padding: { top: 140, right: 48, bottom: 220, left: 48 },
-              maxZoom: 17,
+              padding: {
+                top: SEARCH_BAR_PADDING_TOP,
+                right: FOCUS_SIDE_PADDING,
+                bottom: FOCUS_BOTTOM_PADDING,
+                left: FOCUS_SIDE_PADDING,
+              },
+              maxZoom: 15.4,
               duration: 600,
             },
           );
         } else {
+          const centerLat = (minLat + maxLat) / 2;
+          const centerLng = (minLng + maxLng) / 2;
           setViewState((current) => ({
             ...current,
-            latitude: (location.lat + nearestChurch.latitude) / 2,
-            longitude: (location.lng + nearestChurch.longitude) / 2,
-            zoom: 16,
+            latitude: centerLat,
+            longitude: centerLng,
+            zoom: 14.8,
           }));
         }
         setSheetMode('collapsed');
