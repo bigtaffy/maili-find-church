@@ -15,6 +15,9 @@ import { ReportError } from './pages/ReportError';
 import { Settings } from './pages/Settings';
 import { api } from './lib/api';
 
+const BROWSER_GATE_STORAGE_KEY = 'maili:browser-gate:last-redirect-at';
+const BROWSER_GATE_SUPPRESSION_MS = 10 * 60 * 1000;
+
 function getMobileBrowserGate() {
   if (typeof navigator === 'undefined' || typeof window === 'undefined') return { blocked: false };
 
@@ -39,6 +42,18 @@ function getMobileBrowserGate() {
 
   if (isIOSSafari || isIOSChrome || isAndroidChrome) {
     return { blocked: false };
+  }
+
+  try {
+    const lastRedirectAt = window.localStorage.getItem(BROWSER_GATE_STORAGE_KEY);
+    if (lastRedirectAt) {
+      const elapsed = Date.now() - Number(lastRedirectAt);
+      if (Number.isFinite(elapsed) && elapsed < BROWSER_GATE_SUPPRESSION_MS) {
+        return { blocked: false };
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to read browser gate cache:', error);
   }
 
   const currentUrl = window.location.href;
@@ -67,6 +82,12 @@ export default function App() {
 
   useEffect(() => {
     if (!browserGate.blocked) return;
+
+    try {
+      window.localStorage.setItem(BROWSER_GATE_STORAGE_KEY, String(Date.now()));
+    } catch (error) {
+      console.warn('Failed to cache browser redirect timestamp:', error);
+    }
 
     window.location.replace(browserGate.redirectUrl);
 

@@ -184,6 +184,7 @@ export function Home() {
   const [selectedChurch, setSelectedChurch] = useState<ParishSummary | null>(null);
   const [selectedChurchDetail, setSelectedChurchDetail] = useState<ParishDetail | null>(null);
   const [selectedChurchUpcomingMass, setSelectedChurchUpcomingMass] = useState<UpcomingMass | null>(null);
+  const [nearestChurchId, setNearestChurchId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchSuggestions, setSearchSuggestions] = useState<ParishSummary[]>([]);
@@ -305,6 +306,7 @@ export function Home() {
         api.getUpcomingMasses(location.lat, location.lng, 10, 168, 20),
       ]);
       const nearestChurch = nearbyRes.data?.[0] ?? null;
+      setNearestChurchId(nearestChurch?.id ?? null);
       setNearbyChurches(focusNearest && nearestChurch ? [nearestChurch] : nearbyRes.data || []);
       setListItems(upcomingRes.data || []);
       setSelectedChurch((current) => {
@@ -761,7 +763,7 @@ export function Home() {
                         <h2 className={`${sheetMode === 'expanded' ? 'text-2xl' : 'text-xl'} font-bold text-gray-900 line-clamp-2 leading-tight`}>
                           {selectedChurch.name_zh}
                         </h2>
-                        {!isSearchMode && selectedChurch.id === nearbyChurches[0]?.id && (
+                        {!isSearchMode && selectedChurch.id === nearestChurchId && (
                           <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700">
                             最近
                           </span>
@@ -902,7 +904,7 @@ export function Home() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-3 mb-1">
                         <h3 className="text-lg font-bold text-gray-900 line-clamp-1">{parish.name_zh}</h3>
-                        {!isSearchMode && idx === 0 && (
+                        {!isSearchMode && parish.id === nearestChurchId && (
                           <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700">
                             最近可參與
                           </span>
