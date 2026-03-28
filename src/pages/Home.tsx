@@ -18,7 +18,6 @@ const BOTTOM_NAV_OFFSET = 'calc(4rem + env(safe-area-inset-bottom, 0px))';
 const SEARCH_BAR_PADDING_TOP = 132;
 const FOCUS_BOTTOM_PADDING = 360;
 const FOCUS_SIDE_PADDING = 56;
-const MIN_FOCUS_LAT_SPAN = 0.014;
 const SHEET_TRANSLATE = {
   expanded: '0px',
   collapsed: `calc(74vh - ${COLLAPSED_SHEET_VISIBLE_HEIGHT})`,
@@ -58,9 +57,18 @@ function getFocusBounds(
   location: { lat: number; lng: number },
   church: { latitude: number; longitude: number },
 ) {
+  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 430;
+  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 900;
+  const aspectRatio = viewportHeight / Math.max(viewportWidth, 1);
+  const minFocusLatSpan =
+    viewportWidth <= 430 && aspectRatio >= 1.9
+      ? 0.0048
+      : viewportWidth <= 768
+        ? 0.0068
+        : 0.0095;
   const centerLat = (location.lat + church.latitude) / 2;
-  const latSpan = Math.max(Math.abs(location.lat - church.latitude), MIN_FOCUS_LAT_SPAN);
-  const lngFloor = MIN_FOCUS_LAT_SPAN / Math.max(Math.cos((centerLat * Math.PI) / 180), 0.45);
+  const latSpan = Math.max(Math.abs(location.lat - church.latitude), minFocusLatSpan);
+  const lngFloor = minFocusLatSpan / Math.max(Math.cos((centerLat * Math.PI) / 180), 0.45);
   const lngSpan = Math.max(Math.abs(location.lng - church.longitude), lngFloor);
 
   return {
@@ -68,6 +76,67 @@ function getFocusBounds(
     maxLat: centerLat + latSpan / 2,
     minLng: (location.lng + church.longitude) / 2 - lngSpan / 2,
     maxLng: (location.lng + church.longitude) / 2 + lngSpan / 2,
+  };
+}
+
+function getFocusPadding() {
+  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 900;
+  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 430;
+  const bottom = Math.min(FOCUS_BOTTOM_PADDING, Math.round(viewportHeight * 0.28));
+  const side = Math.max(28, Math.min(FOCUS_SIDE_PADDING, Math.round(viewportWidth * 0.1)));
+
+  return {
+    top: SEARCH_BAR_PADDING_TOP,
+    right: side,
+    bottom,
+    left: side,
+  };
+}
+
+function getDistanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+
+  const haversine =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.sin(dLng / 2) * Math.sin(dLng / 2) * Math.cos(lat1) * Math.cos(lat2);
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
+function getHomeFocusZoomByDistance(distanceKm: number) {
+  if (distanceKm <= 0.2) return 15.6;
+  if (distanceKm <= 0.4) return 15.2;
+  if (distanceKm <= 0.8) return 14.8;
+  if (distanceKm <= 1.2) return 14.5;
+  if (distanceKm <= 2) return 14.1;
+  if (distanceKm <= 3.5) return 13.7;
+  return 13.3;
+}
+
+function getFocusCenter(
+  location: { lat: number; lng: number },
+  church: { latitude: number; longitude: number },
+) {
+  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 900;
+  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 430;
+  const aspectRatio = viewportHeight / Math.max(viewportWidth, 1);
+  const centerLat = (location.lat + church.latitude) / 2;
+  const centerLng = (location.lng + church.longitude) / 2;
+  const latOffset =
+    viewportWidth <= 430 && aspectRatio >= 1.9
+      ? 0.0016
+      : viewportWidth <= 768
+        ? 0.0011
+        : 0.0008;
+
+  return {
+    latitude: centerLat + latOffset,
+    longitude: centerLng,
   };
 }
 
@@ -161,8 +230,13 @@ export function Home() {
         hasUserExploredMapRef.current = false;
         skipNextLocationEffectRef.current = true;
         setUserLocation(nextLocation);
-        await loadHomeData(nextLocation, { focusNearest: true });
         setIsLocating(false);
+
+        try {
+          await loadHomeData(nextLocation, { focusNearest: true, background: true });
+        } catch (error) {
+          console.error('Failed to reload home data after GPS locate:', error);
+        }
       },
       (error) => {
         console.warn('Device GPS error:', error);
@@ -217,10 +291,12 @@ export function Home() {
 
   async function loadHomeData(
     location: { lat: number; lng: number },
-    options: { preserveSelection?: boolean; focusNearest?: boolean } = {},
+    options: { preserveSelection?: boolean; focusNearest?: boolean; background?: boolean } = {},
   ) {
-    const { preserveSelection = false, focusNearest = false } = options;
-    setLoading(true);
+    const { preserveSelection = false, focusNearest = false, background = false } = options;
+    if (!background) {
+      setLoading(true);
+    }
     try {
       const state = await runSync(false);
       setSyncState(state);
@@ -239,33 +315,36 @@ export function Home() {
         return nearbyRes.data?.[0] ?? null;
       });
       if (focusNearest && nearestChurch) {
-        const { minLat, maxLat, minLng, maxLng } = getFocusBounds(location, nearestChurch);
+        const padding = getFocusPadding();
+        const distanceKm = getDistanceKm(location, {
+          lat: nearestChurch.latitude,
+          lng: nearestChurch.longitude,
+        });
+        const focusZoom = getHomeFocusZoomByDistance(distanceKm);
+        const focusCenter = getFocusCenter(location, nearestChurch);
 
         if (mapRef.current) {
-          mapRef.current.fitBounds(
-            [
-              [minLng, minLat],
-              [maxLng, maxLat],
-            ],
-            {
-              padding: {
-                top: SEARCH_BAR_PADDING_TOP,
-                right: FOCUS_SIDE_PADDING,
-                bottom: FOCUS_BOTTOM_PADDING,
-                left: FOCUS_SIDE_PADDING,
-              },
-              maxZoom: 14.2,
-              duration: 700,
-            },
-          );
-        } else {
-          const centerLat = (minLat + maxLat) / 2;
-          const centerLng = (minLng + maxLng) / 2;
           setViewState((current) => ({
             ...current,
-            latitude: centerLat,
-            longitude: centerLng,
-            zoom: 13.8,
+            latitude: focusCenter.latitude,
+            longitude: focusCenter.longitude,
+            zoom: focusZoom,
+            padding,
+          }));
+
+          mapRef.current.easeTo({
+            center: [focusCenter.longitude, focusCenter.latitude],
+            zoom: focusZoom,
+            padding,
+            duration: 900,
+          });
+        } else {
+          setViewState((current) => ({
+            ...current,
+            latitude: focusCenter.latitude,
+            longitude: focusCenter.longitude,
+            zoom: focusZoom,
+            padding,
           }));
         }
         setSheetMode('collapsed');
@@ -274,7 +353,9 @@ export function Home() {
     } catch (error) {
       console.error('Failed to fetch home data:', error);
     } finally {
-      setLoading(false);
+      if (!background) {
+        setLoading(false);
+      }
     }
   }
 
