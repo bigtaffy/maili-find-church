@@ -12,6 +12,8 @@ import type {
   CollectionResponse,
   OfflineSyncState,
   ParishDetail,
+  ParishReportComparableField,
+  ParishReportFormData,
   ParishReport,
   ParishReportPayload,
   ParishSummary,
@@ -25,6 +27,8 @@ export type {
   ParishDetail,
   ParishPhoto,
   ParishReport,
+  ParishReportComparableField,
+  ParishReportFormData,
   ParishReportPayload,
   ParishReportType,
   ParishSummary,
@@ -255,28 +259,58 @@ export const api = {
     parishId: string | number,
     payload: ParishReportPayload,
   ): Promise<SingleResponse<ParishReport>> {
-    const formData = new FormData();
-    formData.append('report_type', payload.reportType);
+    const hasPhotos = Boolean(payload.photos?.length);
+    const url = `${BASE_URL}/parishes/${parishId}/reports`;
 
-    if (payload.reporterName?.trim()) formData.append('reporter_name', payload.reporterName.trim());
-    if (payload.reporterEmail?.trim()) formData.append('reporter_email', payload.reporterEmail.trim());
-    if (payload.reporterPhone?.trim()) formData.append('reporter_phone', payload.reporterPhone.trim());
-    if (payload.description?.trim()) formData.append('description', payload.description.trim());
+    let response: Response;
 
-    payload.photos?.forEach((photo) => {
-      formData.append('photos[]', photo);
-    });
+    if (hasPhotos) {
+      const formData = new FormData();
+      payload.reportTypes.forEach((reportType) => {
+        formData.append('report_types[]', reportType);
+      });
 
-    const response = await fetch(`${BASE_URL}/parishes/${parishId}/reports`, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-      },
-      body: formData,
-    });
+      Object.entries(payload.submittedData ?? {}).forEach(([field, value]) => {
+        if (!value?.trim()) return;
+        formData.append(`submitted_data[${field}]`, value.trim());
+      });
+
+      if (payload.reporterName?.trim()) formData.append('reporter_name', payload.reporterName.trim());
+      if (payload.reporterEmail?.trim()) formData.append('reporter_email', payload.reporterEmail.trim());
+      if (payload.reporterPhone?.trim()) formData.append('reporter_phone', payload.reporterPhone.trim());
+      if (payload.description?.trim()) formData.append('description', payload.description.trim());
+
+      payload.photos?.forEach((photo) => {
+        formData.append('photos[]', photo);
+      });
+
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+        },
+        body: formData,
+      });
+    } else {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          report_types: payload.reportTypes,
+          submitted_data: payload.submittedData ?? {},
+          reporter_name: payload.reporterName?.trim() || undefined,
+          reporter_email: payload.reporterEmail?.trim() || undefined,
+          reporter_phone: payload.reporterPhone?.trim() || undefined,
+          description: payload.description?.trim() || undefined,
+        }),
+      });
+    }
 
     if (response.ok) {
-      return response.json();
+      return { data: await response.json() };
     }
 
     const errorBody = await parseJsonSafely(response);
@@ -295,5 +329,35 @@ export const api = {
     }
 
     throw new Error(errorBody?.message || '送出回報失敗，請稍後再試。');
+  },
+
+  async getParishReportForm(parishId: string | number): Promise<SingleResponse<ParishReportFormData>> {
+    const response = await fetch(`${BASE_URL}/parishes/${parishId}/report-form`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      return { data: await response.json().then((json) => json.data) };
+    }
+
+    const errorBody = await parseJsonSafely(response);
+
+    if (response.status === 429) {
+      throw new Error(errorBody?.message || '取得回報表單次數已達上限，請稍後再試。');
+    }
+
+    if (response.status === 404) {
+      throw new Error(errorBody?.message || '找不到指定的教堂。');
+    }
+
+    if (response.status === 422) {
+      const firstError = Object.values(errorBody?.errors ?? {})[0];
+      throw new Error(Array.isArray(firstError) ? String(firstError[0]) : errorBody?.message || '欄位驗證失敗。');
+    }
+
+    throw new Error(errorBody?.message || '取得回報表單失敗，請稍後再試。');
   },
 };

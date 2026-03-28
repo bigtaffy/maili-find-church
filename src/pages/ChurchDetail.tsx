@@ -18,12 +18,25 @@ import {
 import maplibregl from 'maplibre-gl';
 import MapGL, { Marker } from 'react-map-gl/maplibre';
 import { api, type ParishDetail, type UpcomingMass } from '@/lib/api';
+import { clearPilgrimageWish, getPilgrimageStamp, getPilgrimageWishesByParish, savePilgrimageWish } from '@/lib/pilgrimageStorage';
+import type { PilgrimageStamp, PilgrimageWish, PilgrimageWishSlots, WishStatus } from '@/lib/types';
 import { getLiturgyDisplayTitle, getMassDisplayTitle, getMassSection, sortMassTimes } from '@/lib/utils';
 import { useFavorites } from '@/lib/useFavorites';
 
 const FALLBACK_CHURCH_IMAGE =
   'https://images.unsplash.com/photo-1548625361-ec846e2e92c2?auto=format&fit=crop&q=80&w=1200';
 const OPEN_FREE_MAP_LIBERTY_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+const WISH_SLOT_META = [
+  { slot: 1 as const, title: '為自己', category: 'self' as const },
+  { slot: 2 as const, title: '為家人', category: 'family' as const },
+  { slot: 3 as const, title: '為世界', category: 'world' as const },
+];
+
+function getWishStatusLabel(status: WishStatus) {
+  if (status === 'fulfilled') return '已實現';
+  if (status === 'released') return '放下了';
+  return '靜待中';
+}
 
 function formatMassCountdown(minutesAway?: number | null) {
   if (minutesAway == null) return null;
@@ -84,6 +97,13 @@ export function ChurchDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showMapApps, setShowMapApps] = useState(false);
+  const [pilgrimageStamp, setPilgrimageStamp] = useState<PilgrimageStamp | null>(null);
+  const [pilgrimageWishes, setPilgrimageWishes] = useState<PilgrimageWishSlots | null>(null);
+  const [editingWishSlot, setEditingWishSlot] = useState<1 | 2 | 3 | null>(null);
+  const [wishDraft, setWishDraft] = useState<{ content: string; status: WishStatus }>({
+    content: '',
+    status: 'pending',
+  });
 
   useEffect(() => {
     async function fetchDetail() {
@@ -107,6 +127,33 @@ export function ChurchDetail() {
 
     fetchDetail();
   }, [id]);
+
+  useEffect(() => {
+    if (!church?.id) return;
+
+    const syncPilgrimageState = () => {
+      setPilgrimageStamp(getPilgrimageStamp(church.id));
+      setPilgrimageWishes(getPilgrimageWishesByParish(church.id));
+    };
+
+    syncPilgrimageState();
+    window.addEventListener('focus', syncPilgrimageState);
+    window.addEventListener('storage', syncPilgrimageState);
+
+    return () => {
+      window.removeEventListener('focus', syncPilgrimageState);
+      window.removeEventListener('storage', syncPilgrimageState);
+    };
+  }, [church?.id]);
+
+  useEffect(() => {
+    if (!editingWishSlot || !pilgrimageWishes) return;
+    const wish = pilgrimageWishes[editingWishSlot];
+    setWishDraft({
+      content: wish?.content ?? '',
+      status: wish?.status ?? 'pending',
+    });
+  }, [editingWishSlot, pilgrimageWishes]);
 
   const mapAppOptions = useMemo(() => (church ? getMapAppOptions(church) : []), [church]);
 
@@ -135,6 +182,54 @@ export function ChurchDetail() {
   const weekdayMasses = sortMassTimes(church.mass_times?.filter((m) => getMassSection(m) === 'weekday') || []);
   const specialMasses = sortMassTimes(church.mass_times?.filter((m) => getMassSection(m) === 'special') || []);
   const liturgyItems = sortMassTimes(church.mass_times?.filter((m) => getMassSection(m) === 'liturgy') || []);
+  const isPilgrimageUnlocked = Boolean(pilgrimageStamp);
+  const filledWishCount = pilgrimageWishes ? [pilgrimageWishes[1], pilgrimageWishes[2], pilgrimageWishes[3]].filter(Boolean).length : 0;
+
+  function refreshPilgrimageState() {
+    setPilgrimageStamp(getPilgrimageStamp(church.id));
+    setPilgrimageWishes(getPilgrimageWishesByParish(church.id));
+  }
+
+  function startEditingWish(slot: 1 | 2 | 3) {
+    const wish = pilgrimageWishes?.[slot] ?? null;
+    setWishDraft({
+      content: wish?.content ?? '',
+      status: wish?.status ?? 'pending',
+    });
+    setEditingWishSlot(slot);
+  }
+
+  function cancelWishEditing() {
+    setEditingWishSlot(null);
+    setWishDraft({ content: '', status: 'pending' });
+  }
+
+  function handleSaveWish(slot: 1 | 2 | 3, category: 'self' | 'family' | 'world') {
+    const content = wishDraft.content.trim();
+    if (!content) return;
+
+    const existingWish = pilgrimageWishes?.[slot] ?? null;
+    const now = new Date().toISOString();
+    const payload: PilgrimageWish = {
+      category,
+      content,
+      status: wishDraft.status,
+      created_at: existingWish?.created_at ?? now,
+      updated_at: now,
+    };
+
+    savePilgrimageWish(church.id, slot, payload);
+    refreshPilgrimageState();
+    cancelWishEditing();
+  }
+
+  function handleClearWish(slot: 1 | 2 | 3) {
+    clearPilgrimageWish(church.id, slot);
+    refreshPilgrimageState();
+    if (editingWishSlot === slot) {
+      cancelWishEditing();
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -300,6 +395,151 @@ export function ChurchDetail() {
               <p className="text-sm text-gray-500">暫無聯絡資訊</p>
             )}
           </div>
+        </div>
+
+        <div className="bg-white rounded-2xl p-6 shadow-sm mb-4">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">朝聖印章</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {isPilgrimageUnlocked ? '這間教堂已完成首次到訪記錄' : '第一次到訪並完成蓋章後，會解鎖心願卡'}
+              </p>
+            </div>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                isPilgrimageUnlocked ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {isPilgrimageUnlocked ? '已蓋章' : '未蓋章'}
+            </span>
+          </div>
+
+          {isPilgrimageUnlocked ? (
+            <div className="rounded-2xl bg-emerald-50/70 px-4 py-4">
+              <p className="text-sm font-semibold text-emerald-800">已留下朝聖印章</p>
+              <p className="mt-1 text-sm text-emerald-700">
+                {pilgrimageStamp?.stamped_at
+                  ? `蓋章時間：${new Date(pilgrimageStamp.stamped_at).toLocaleString('zh-TW')}`
+                  : '已完成蓋章'}
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-slate-50 px-4 py-4">
+              <p className="text-sm text-slate-600">目前還沒有這間教堂的朝聖印章。</p>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl p-6 shadow-sm mb-4">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">心願卡</h2>
+              <p className="mt-1 text-sm text-slate-500">每間教堂只有第一次到訪並完成蓋章後，才會解鎖 3 張心願卡。</p>
+            </div>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                isPilgrimageUnlocked ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {isPilgrimageUnlocked ? `已解鎖 ${filledWishCount}/3` : '尚未解鎖'}
+            </span>
+          </div>
+
+          {!isPilgrimageUnlocked ? (
+            <div className="rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
+              先完成這間教堂的首次蓋章，才會開啟三個願望欄位。
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {WISH_SLOT_META.map(({ slot, title, category }) => {
+                const wish = pilgrimageWishes?.[slot] ?? null;
+                const isEditing = editingWishSlot === slot;
+                return (
+                  <div key={slot} className="rounded-2xl bg-slate-50 px-4 py-4">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-900">{title}</p>
+                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${wish ? 'bg-white text-slate-600' : 'bg-white text-slate-400'}`}>
+                        {wish ? '已許願' : '尚未填寫'}
+                      </span>
+                    </div>
+                    {isEditing ? (
+                      <div className="space-y-3">
+                        <textarea
+                          value={wishDraft.content}
+                          onChange={(event) => setWishDraft((current) => ({ ...current, content: event.target.value }))}
+                          rows={4}
+                          placeholder="寫下這次想放在這裡的心願"
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none focus:border-blue-400"
+                        />
+                        <div>
+                          <p className="mb-2 text-xs font-medium text-slate-500">狀態</p>
+                          <select
+                            value={wishDraft.status}
+                            onChange={(event) => setWishDraft((current) => ({ ...current, status: event.target.value as WishStatus }))}
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none focus:border-blue-400"
+                          >
+                            <option value="pending">靜待中</option>
+                            <option value="fulfilled">已實現</option>
+                            <option value="released">放下了</option>
+                          </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleSaveWish(slot, category)}
+                            disabled={!wishDraft.content.trim()}
+                            className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-blue-300"
+                          >
+                            儲存
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelWishEditing}
+                            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-600 ring-1 ring-slate-200"
+                          >
+                            取消
+                          </button>
+                        </div>
+                      </div>
+                    ) : wish ? (
+                      <>
+                        <p className="text-sm text-slate-700">{wish.content}</p>
+                        <p className="mt-2 text-xs text-slate-500">狀態：{getWishStatusLabel(wish.status)}</p>
+                        <p className="mt-1 text-xs text-slate-400">最後更新：{new Date(wish.updated_at).toLocaleDateString('zh-TW')}</p>
+                        <div className="mt-3 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => startEditingWish(slot)}
+                            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200"
+                          >
+                            編輯
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleClearWish(slot)}
+                            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-rose-600 ring-1 ring-rose-200"
+                          >
+                            清除
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-slate-500">這張心願卡還是空白的。</p>
+                        <button
+                          type="button"
+                          onClick={() => startEditingWish(slot)}
+                          className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200"
+                        >
+                          新增心願
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl p-6 shadow-sm mb-4">

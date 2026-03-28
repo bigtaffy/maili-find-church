@@ -94,9 +94,12 @@ export type ParishReportType =
   | 'wrong_address'
   | 'wrong_mass_time'
   | 'wrong_phone'
+  | 'wrong_email'
   | 'wrong_website'
+  | 'wrong_priest'
   | 'closed_permanently'
   | 'closed_temporarily'
+  | 'info_outdated'
   | 'other';
 
 export type ParishReportPhoto = {
@@ -107,17 +110,78 @@ export type ParishReportPhoto = {
 export type ParishReport = {
   id: number;
   parish_id: number;
-  report_type: ParishReportType;
+  report_types: ParishReportType[];
   status: 'pending' | 'reviewed' | 'resolved' | 'rejected' | string;
+  has_diff?: boolean;
+  diff_count?: number;
   photos: ParishReportPhoto[];
   created_at: string;
 };
 
+export type ParishReportComparableField =
+  | 'name_zh'
+  | 'name_en'
+  | 'address'
+  | 'phone'
+  | 'email'
+  | 'website'
+  | 'fb_url'
+  | 'ig_url'
+  | 'priest_name';
+
+export type ParishReportFormData = {
+  parish_id: number;
+  parish_name: string;
+  current_data: Partial<Record<ParishReportComparableField, string | null>>;
+  report_types: Record<ParishReportType, string>;
+  comparable_fields: Partial<Record<ParishReportComparableField, string>>;
+};
+
 export type ParishReportPayload = {
-  reportType: ParishReportType;
+  reportTypes: ParishReportType[];
+  submittedData?: Partial<Record<ParishReportComparableField, string>>;
   reporterName?: string;
   reporterEmail?: string;
   reporterPhone?: string;
   description?: string;
   photos?: File[];
+};
+
+export type PilgrimageVerificationMethod = 'gps' | 'manual';
+
+export type PilgrimageStamp = {
+  parish_id: number;
+  stamped_at: string;
+  lat: number;
+  lng: number;
+  accuracy?: number | null;
+  verification_method: PilgrimageVerificationMethod;
+};
+
+export type PilgrimageStampMap = Record<string, PilgrimageStamp>;
+
+export type WishCategory = 'self' | 'family' | 'world';
+
+export type WishStatus = 'pending' | 'fulfilled' | 'released';
+
+export type PilgrimageWish = {
+  category: WishCategory;
+  content: string;
+  status: WishStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PilgrimageWishSlots = {
+  1: PilgrimageWish | null;
+  2: PilgrimageWish | null;
+  3: PilgrimageWish | null;
+};
+
+export type PilgrimageWishMap = Record<string, PilgrimageWishSlots>;
+
+export type PilgrimageUiState = {
+  stamp_intro_seen?: boolean;
+  wish_intro_seen?: boolean;
+  wish_local_only_notice_seen?: boolean;
 };
