@@ -135,6 +135,7 @@ export function Home() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const shouldFocusNearestRef = useRef(true);
   const hasUserExploredMapRef = useRef(false);
+  const skipNextLocationEffectRef = useRef(false);
 
   function requestDeviceGpsLocation() {
     if (!navigator.geolocation) {
@@ -150,14 +151,17 @@ export function Home() {
     searchInputRef.current?.blur();
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocationError(null);
-        shouldFocusNearestRef.current = true;
-        hasUserExploredMapRef.current = false;
-        setUserLocation({
+      async (position) => {
+        const nextLocation = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
-        });
+        };
+
+        setLocationError(null);
+        hasUserExploredMapRef.current = false;
+        skipNextLocationEffectRef.current = true;
+        setUserLocation(nextLocation);
+        await loadHomeData(nextLocation, { focusNearest: true });
         setIsLocating(false);
       },
       (error) => {
@@ -303,6 +307,10 @@ export function Home() {
 
   useEffect(() => {
     if (!userLocation) return;
+    if (skipNextLocationEffectRef.current) {
+      skipNextLocationEffectRef.current = false;
+      return;
+    }
     const focusNearest = shouldFocusNearestRef.current;
     shouldFocusNearestRef.current = false;
     loadHomeData(userLocation, { focusNearest });
