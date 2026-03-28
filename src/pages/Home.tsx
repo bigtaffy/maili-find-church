@@ -201,11 +201,25 @@ export function Home() {
     longitude: FALLBACK_LOCATION.lng,
     zoom: 10.5,
   });
+  const [viewportWidth, setViewportWidth] = useState(
+    typeof window !== 'undefined' ? window.innerWidth : 430,
+  );
   const mapRef = useRef<MapRef | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const shouldFocusNearestRef = useRef(true);
   const hasUserExploredMapRef = useRef(false);
   const skipNextLocationEffectRef = useRef(false);
+  const isNarrowViewport = viewportWidth <= 360;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   function requestDeviceGpsLocation() {
     if (!navigator.geolocation) {
@@ -705,14 +719,18 @@ export function Home() {
                   exit={{ bottom: LOCATION_BUTTON_BOTTOM.hidden, opacity: 0 }}
                   transition={SHEET_SPRING}
                   onClick={requestDeviceGpsLocation}
-                  className="absolute left-5 z-[1100] flex translate-y-1/2 items-center gap-2 rounded-full bg-white px-4 py-3 shadow-lg ring-1 ring-slate-200 active:bg-gray-50"
+                  className={`absolute z-[1100] flex translate-y-1/2 items-center rounded-full bg-white shadow-lg ring-1 ring-slate-200 active:bg-gray-50 ${
+                    isNarrowViewport ? 'left-3 gap-1.5 px-3 py-2.5' : 'left-5 gap-2 px-4 py-3'
+                  }`}
                 >
                   {isLocating ? (
                     <Loader2 className="w-5 h-5 text-gray-700 animate-spin" />
                   ) : (
                     <Navigation className="w-5 h-5 text-gray-700" />
                   )}
-                  <span className="text-sm font-medium text-gray-700">{isLocating ? '定位中' : '定位'}</span>
+                  <span className={`${isNarrowViewport ? 'text-xs' : 'text-sm'} font-medium text-gray-700`}>
+                    {isLocating ? '定位中' : '定位'}
+                  </span>
                 </motion.button>
 
                 <motion.button
@@ -722,7 +740,9 @@ export function Home() {
                   exit={{ bottom: LOCATION_BUTTON_BOTTOM.hidden, opacity: 0 }}
                   transition={SHEET_SPRING}
                   onClick={() => setSheetMode('hidden')}
-                  className="absolute right-5 z-[1100] flex translate-y-1/2 items-center justify-center rounded-full bg-white/95 p-3 text-slate-500 shadow-lg ring-1 ring-slate-200 backdrop-blur active:bg-slate-50"
+                  className={`absolute z-[1100] flex translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-slate-500 shadow-lg ring-1 ring-slate-200 backdrop-blur active:bg-slate-50 ${
+                    isNarrowViewport ? 'right-3 p-2.5' : 'right-5 p-3'
+                  }`}
                   aria-label="關閉教堂資訊"
                 >
                   <X className="h-4 w-4" />
@@ -741,7 +761,11 @@ export function Home() {
                   className="absolute bottom-0 left-0 right-0 z-[1000] rounded-t-3xl bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.1)]"
                   style={{ height: SHEET_HEIGHT, bottom: BOTTOM_NAV_OFFSET }}
                 >
-                  <div className={`relative h-full px-5 ${sheetMode === 'expanded' ? 'overflow-y-auto pt-5 pb-6' : 'overflow-hidden pt-4 pb-2'}`}>
+                  <div
+                    className={`relative h-full ${
+                      isNarrowViewport ? 'px-3' : 'px-5'
+                    } ${sheetMode === 'expanded' ? 'overflow-y-auto pt-5 pb-6' : 'overflow-hidden pt-4 pb-2'}`}
+                  >
                     <div className="relative overflow-hidden rounded-[28px] bg-white">
                     {sheetMode !== 'expanded' && (
                       <>
@@ -758,32 +782,40 @@ export function Home() {
                       </>
                     )}
 
-                    <div className={`relative min-w-0 ${sheetMode !== 'expanded' ? 'px-2 pt-2 pb-1' : ''}`}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <h2 className={`${sheetMode === 'expanded' ? 'text-2xl' : 'text-xl'} font-bold text-gray-900 line-clamp-2 leading-tight`}>
+                    <div className={`relative min-w-0 ${sheetMode !== 'expanded' ? (isNarrowViewport ? 'px-1 pt-1.5 pb-1' : 'px-2 pt-2 pb-1') : ''}`}>
+                      <div className={`mb-1 ${isNarrowViewport ? 'space-y-1.5' : 'flex items-center gap-2'}`}>
+                        <h2 className={`font-bold text-gray-900 line-clamp-2 leading-tight ${
+                          sheetMode === 'expanded'
+                            ? isNarrowViewport
+                              ? 'text-xl'
+                              : 'text-2xl'
+                            : isNarrowViewport
+                              ? 'text-lg'
+                              : 'text-xl'
+                        }`}>
                           {selectedChurch.name_zh}
                         </h2>
                         {!isSearchMode && selectedChurch.id === nearestChurchId && (
-                          <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700">
+                          <span className="inline-flex shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700">
                             最近
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-500 mb-1.5">
+                      <p className={`${isNarrowViewport ? 'text-xs' : 'text-sm'} text-gray-500 mb-1.5`}>
                         {formatDistance(selectedChurch.distance_km, selectedChurch.address)}
                       </p>
 
-                      <div className={`rounded-2xl px-3 py-2.5 mb-1.5 min-w-0 ${sheetMode === 'expanded' ? 'bg-slate-50' : 'bg-white/78 backdrop-blur-sm shadow-sm'}`}>
+                      <div className={`rounded-2xl ${isNarrowViewport ? 'px-2.5 py-2' : 'px-3 py-2.5'} mb-1.5 min-w-0 ${sheetMode === 'expanded' ? 'bg-slate-50' : 'bg-white/78 backdrop-blur-sm shadow-sm'}`}>
                         <div className="flex items-center gap-2 text-slate-700 mb-1">
                           <Clock3 className="w-4 h-4" />
                           <span className="text-xs font-semibold">最近彌撒</span>
                         </div>
                         {selectedChurchUpcomingMass?.mass_time ? (
                           <div>
-                            <p className="text-sm font-medium text-slate-900 line-clamp-2 leading-snug">
+                            <p className={`${isNarrowViewport ? 'text-[13px]' : 'text-sm'} font-medium text-slate-900 line-clamp-2 leading-snug`}>
                               {getMassDisplayTitle(selectedChurchUpcomingMass.mass_time)}
                             </p>
-                            <p className="text-xs text-slate-600 line-clamp-2 leading-snug">
+                            <p className={`${isNarrowViewport ? 'text-[11px]' : 'text-xs'} text-slate-600 line-clamp-2 leading-snug`}>
                               {formatMassCountdown(selectedChurchUpcomingMass.minutes_away) || '近期開放中'}
                               {selectedChurchUpcomingMass.mass_time.label
                                 ? ` ・ ${selectedChurchUpcomingMass.mass_time.label}`
@@ -798,7 +830,9 @@ export function Home() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => navigate(`/church/${selectedChurch.id}`)}
-                          className="bg-blue-600 text-white px-5 py-2.5 rounded-full text-sm font-medium flex items-center gap-2 active:bg-blue-700 transition-colors"
+                          className={`bg-blue-600 text-white rounded-full font-medium flex items-center gap-2 active:bg-blue-700 transition-colors ${
+                            isNarrowViewport ? 'px-4 py-2 text-[13px]' : 'px-5 py-2.5 text-sm'
+                          }`}
                         >
                           查看詳情 <ArrowRight className="w-4 h-4" />
                         </button>
