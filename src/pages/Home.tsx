@@ -670,7 +670,7 @@ export function Home() {
                             event.currentTarget.src = FALLBACK_CHURCH_IMAGE;
                           }}
                         />
-                        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/96 to-white/45" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/96 to-transparent" />
                         <div className="absolute inset-0 bg-gradient-to-t from-white/86 via-transparent to-white/10" />
                       </>
                     )}
