@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, ArrowRight, Navigation, Loader2, X, Clock3, CloudOff, Database, RefreshCw, MapPin, Phone, Globe, Church } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
@@ -144,6 +144,10 @@ export function Home() {
 
     setIsLocating(true);
     setLocationError(null);
+    setIsSearchMode(false);
+    setSearchSuggestions([]);
+    setIsSearchInputFocused(false);
+    searchInputRef.current?.blur();
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -449,23 +453,6 @@ export function Home() {
       console.error('Failed to refresh churches in viewport:', error);
     }
   }
-
-  const mapCenter = useMemo(
-    () => ({
-      latitude: selectedChurch?.latitude ?? userLocation?.lat ?? FALLBACK_LOCATION.lat,
-      longitude: selectedChurch?.longitude ?? userLocation?.lng ?? FALLBACK_LOCATION.lng,
-      zoom: 10.5,
-    }),
-    [selectedChurch, userLocation],
-  );
-
-  useEffect(() => {
-    setViewState((current) => ({
-      ...current,
-      latitude: mapCenter.latitude,
-      longitude: mapCenter.longitude,
-    }));
-  }, [mapCenter.latitude, mapCenter.longitude]);
 
   const selectedChurchMassTimes = selectedChurchDetail?.mass_times ?? [];
   const selectedChurchSundayMasses = sortMassTimes(
