@@ -15,10 +15,9 @@ const OPEN_FREE_MAP_LIBERTY_STYLE = 'https://tiles.openfreemap.org/styles/libert
 const SHEET_HEIGHT = '74vh';
 const BOTTOM_NAV_OFFSET = 'calc(4.5rem + env(safe-area-inset-bottom, 0px))';
 const SEARCH_BAR_PADDING_TOP = 132;
-const SHEET_COLLAPSED_VISIBLE_HEIGHT = 184;
-const FOCUS_BOTTOM_PADDING = 300;
+const FOCUS_BOTTOM_PADDING = 360;
 const FOCUS_SIDE_PADDING = 56;
-const MIN_FOCUS_LAT_SPAN = 0.008;
+const MIN_FOCUS_LAT_SPAN = 0.014;
 const SHEET_TRANSLATE = {
   expanded: '0px',
   collapsed: 'calc(74vh - 184px)',
@@ -118,6 +117,7 @@ export function Home() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchSuggestions, setSearchSuggestions] = useState<ParishSummary[]>([]);
+  const [isSearchInputFocused, setIsSearchInputFocused] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(FALLBACK_LOCATION);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -166,6 +166,21 @@ export function Home() {
         maximumAge: 0,
       },
     );
+  }
+
+  function focusChurchOnMap(church: ParishSummary) {
+    if (mapRef.current) {
+      mapRef.current.easeTo({
+        center: [church.longitude, church.latitude],
+        duration: 700,
+      });
+    } else {
+      setViewState((current) => ({
+        ...current,
+        latitude: church.latitude,
+        longitude: church.longitude,
+      }));
+    }
   }
 
   async function runSync(force = false) {
@@ -230,8 +245,8 @@ export function Home() {
                 bottom: FOCUS_BOTTOM_PADDING,
                 left: FOCUS_SIDE_PADDING,
               },
-              maxZoom: 15.4,
-              duration: 600,
+              maxZoom: 14.2,
+              duration: 700,
             },
           );
         } else {
@@ -241,7 +256,7 @@ export function Home() {
             ...current,
             latitude: centerLat,
             longitude: centerLng,
-            zoom: 14.8,
+            zoom: 13.8,
           }));
         }
         setSheetMode('collapsed');
@@ -381,9 +396,11 @@ export function Home() {
   function applySuggestion(parish: ParishSummary) {
     setSearchQuery(parish.name_zh);
     setSearchSuggestions([]);
+    setIsSearchInputFocused(false);
     searchInputRef.current?.blur();
     setNearbyChurches([parish]);
     setSelectedChurch(parish);
+    focusChurchOnMap(parish);
     setSheetMode('collapsed');
     setListItems([
       {
@@ -491,6 +508,8 @@ export function Home() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => setIsSearchInputFocused(true)}
+            onBlur={() => setIsSearchInputFocused(false)}
             placeholder="搜尋教堂、英文名或地址"
             className="flex-1 bg-transparent outline-none text-gray-700"
             autoComplete="off"
@@ -502,7 +521,7 @@ export function Home() {
           )}
         </form>
 
-        {searchSuggestions.length > 0 && (
+        {isSearchInputFocused && searchSuggestions.length > 0 && (
           <div className="overflow-hidden rounded-3xl bg-white/95 backdrop-blur shadow-lg">
             {searchSuggestions.map((parish) => (
               <button
@@ -562,7 +581,14 @@ export function Home() {
 
             {nearbyChurches.map((church) => (
               <Marker key={church.id} longitude={church.longitude} latitude={church.latitude} anchor="bottom">
-                <button type="button" onClick={() => setSelectedChurch(church)} className="group">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedChurch(church);
+                    focusChurchOnMap(church);
+                  }}
+                  className="group"
+                >
                   {selectedChurch?.id === church.id ? (
                     <motion.div
                       animate={{ y: [0, -4, 0] }}
