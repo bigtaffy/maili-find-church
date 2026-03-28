@@ -13,20 +13,21 @@ const FALLBACK_CHURCH_IMAGE =
   'https://images.unsplash.com/photo-1548625361-ec846e2e92c2?auto=format&fit=crop&q=80&w=1200';
 const OPEN_FREE_MAP_LIBERTY_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 const SHEET_HEIGHT = '74vh';
-const BOTTOM_NAV_OFFSET = 'calc(4.5rem + env(safe-area-inset-bottom, 0px))';
+const COLLAPSED_SHEET_VISIBLE_HEIGHT = '148px';
+const BOTTOM_NAV_OFFSET = 'calc(4rem + env(safe-area-inset-bottom, 0px))';
 const SEARCH_BAR_PADDING_TOP = 132;
 const FOCUS_BOTTOM_PADDING = 360;
 const FOCUS_SIDE_PADDING = 56;
 const MIN_FOCUS_LAT_SPAN = 0.014;
 const SHEET_TRANSLATE = {
   expanded: '0px',
-  collapsed: 'calc(74vh - 184px)',
-  hidden: 'calc(100% + 4rem + env(safe-area-inset-bottom, 0px))',
+  collapsed: `calc(74vh - ${COLLAPSED_SHEET_VISIBLE_HEIGHT})`,
+  hidden: 'calc(100% + 3.5rem + env(safe-area-inset-bottom, 0px))',
 } as const;
 const LOCATION_BUTTON_BOTTOM = {
-  expanded: 'calc(74vh + 4.5rem + env(safe-area-inset-bottom, 0px))',
-  collapsed: 'calc(184px + 4.5rem + env(safe-area-inset-bottom, 0px))',
-  hidden: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))',
+  expanded: 'calc(74vh + 4rem + env(safe-area-inset-bottom, 0px))',
+  collapsed: `calc(${COLLAPSED_SHEET_VISIBLE_HEIGHT} + 4rem + env(safe-area-inset-bottom, 0px))`,
+  hidden: 'calc(4rem + env(safe-area-inset-bottom, 0px))',
 } as const;
 const SHEET_SPRING = {
   type: 'spring' as const,
@@ -636,6 +637,19 @@ export function Home() {
                   <span className="text-sm font-medium text-gray-700">{isLocating ? '定位中' : '定位'}</span>
                 </motion.button>
 
+                <motion.button
+                  type="button"
+                  initial={{ bottom: LOCATION_BUTTON_BOTTOM.hidden, opacity: 0 }}
+                  animate={{ bottom: LOCATION_BUTTON_BOTTOM[sheetMode], opacity: 1 }}
+                  exit={{ bottom: LOCATION_BUTTON_BOTTOM.hidden, opacity: 0 }}
+                  transition={SHEET_SPRING}
+                  onClick={() => setSheetMode('hidden')}
+                  className="absolute right-5 z-[1100] flex translate-y-1/2 items-center justify-center rounded-full bg-white/95 p-3 text-slate-500 shadow-lg ring-1 ring-slate-200 backdrop-blur active:bg-slate-50"
+                  aria-label="關閉教堂資訊"
+                >
+                  <X className="h-4 w-4" />
+                </motion.button>
+
                 <motion.div
                   initial={{ y: SHEET_TRANSLATE.hidden }}
                   animate={{ y: SHEET_TRANSLATE[sheetMode] }}
@@ -649,16 +663,7 @@ export function Home() {
                   className="absolute bottom-0 left-0 right-0 z-[1000] rounded-t-3xl bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.1)]"
                   style={{ height: SHEET_HEIGHT, bottom: BOTTOM_NAV_OFFSET }}
                 >
-                  <div className={`relative h-full px-5 pb-6 ${sheetMode === 'expanded' ? 'overflow-y-auto pt-5' : 'overflow-hidden pt-5'}`}>
-                    <button
-                      type="button"
-                      onClick={() => setSheetMode('hidden')}
-                      className="absolute right-5 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-slate-500 shadow-sm ring-1 ring-slate-200 backdrop-blur active:bg-slate-50"
-                      aria-label="關閉教堂資訊"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-
+                  <div className={`relative h-full px-5 ${sheetMode === 'expanded' ? 'overflow-y-auto pt-5 pb-6' : 'overflow-hidden pt-4 pb-2'}`}>
                     <div className="relative overflow-hidden rounded-[28px] bg-white">
                     {sheetMode !== 'expanded' && (
                       <>
@@ -675,7 +680,7 @@ export function Home() {
                       </>
                     )}
 
-                    <div className={`relative min-w-0 ${sheetMode !== 'expanded' ? 'px-2 py-2' : ''}`}>
+                    <div className={`relative min-w-0 ${sheetMode !== 'expanded' ? 'px-2 pt-2 pb-1' : ''}`}>
                       <div className="flex items-center gap-2 mb-1">
                         <h2 className={`${sheetMode === 'expanded' ? 'text-2xl' : 'text-xl'} font-bold text-gray-900 line-clamp-2 leading-tight`}>
                           {selectedChurch.name_zh}
@@ -686,11 +691,11 @@ export function Home() {
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-500 mb-2">
+                      <p className="text-sm text-gray-500 mb-1.5">
                         {formatDistance(selectedChurch.distance_km, selectedChurch.address)}
                       </p>
 
-                      <div className={`rounded-2xl px-3 py-2.5 mb-2 min-w-0 ${sheetMode === 'expanded' ? 'bg-slate-50' : 'bg-white/78 backdrop-blur-sm shadow-sm'}`}>
+                      <div className={`rounded-2xl px-3 py-2.5 mb-1.5 min-w-0 ${sheetMode === 'expanded' ? 'bg-slate-50' : 'bg-white/78 backdrop-blur-sm shadow-sm'}`}>
                         <div className="flex items-center gap-2 text-slate-700 mb-1">
                           <Clock3 className="w-4 h-4" />
                           <span className="text-xs font-semibold">最近彌撒</span>
