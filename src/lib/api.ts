@@ -279,6 +279,7 @@ export const api = {
       if (payload.reporterEmail?.trim()) formData.append('reporter_email', payload.reporterEmail.trim());
       if (payload.reporterPhone?.trim()) formData.append('reporter_phone', payload.reporterPhone.trim());
       if (payload.description?.trim()) formData.append('description', payload.description.trim());
+      if (payload.turnstileToken?.trim()) formData.append('cf-turnstile-response', payload.turnstileToken.trim());
 
       payload.photos?.forEach((photo) => {
         formData.append('photos[]', photo);
@@ -305,6 +306,7 @@ export const api = {
           reporter_email: payload.reporterEmail?.trim() || undefined,
           reporter_phone: payload.reporterPhone?.trim() || undefined,
           description: payload.description?.trim() || undefined,
+          'cf-turnstile-response': payload.turnstileToken?.trim() || undefined,
         }),
       });
     }

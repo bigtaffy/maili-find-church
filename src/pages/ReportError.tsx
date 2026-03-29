@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AlertCircle, ArrowLeft, CheckCircle2, ImagePlus, Loader2, MapPin, X } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
@@ -46,6 +46,16 @@ function buildInitialFormValues(reportForm: ParishReportFormData | null) {
 export function ReportError() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() ?? '';
+  const isLocalDevelopment =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname.startsWith('192.168.') ||
+      window.location.hostname.startsWith('10.') ||
+      window.location.hostname.startsWith('172.16.') ||
+      window.location.hostname.endsWith('.local'));
+  const requiresTurnstile = !isLocalDevelopment;
 
   const [church, setChurch] = useState<ParishDetail | null>(null);
   const [reportForm, setReportForm] = useState<ParishReportFormData | null>(null);
@@ -62,6 +72,18 @@ export function ReportError() {
   const [photos, setPhotos] = useState<File[]>([]);
   const [correctedLocation, setCorrectedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [viewState, setViewState] = useState({ latitude: 25.0478, longitude: 121.517, zoom: 15.2 });
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileReady, setTurnstileReady] = useState(false);
+  const [turnstileError, setTurnstileError] = useState<string | null>(null);
+  const turnstileContainerRef = useRef<HTMLDivElement | null>(null);
+  const turnstileWidgetIdRef = useRef<string | null>(null);
+
+  function resetTurnstile() {
+    if (turnstileWidgetIdRef.current && window.turnstile) {
+      window.turnstile.reset(turnstileWidgetIdRef.current);
+    }
+    setTurnstileToken('');
+  }
 
   useEffect(() => {
     async function fetchData() {
@@ -91,6 +113,91 @@ export function ReportError() {
 
     fetchData();
   }, [id]);
+
+  useEffect(() => {
+    if (!requiresTurnstile) {
+      setTurnstileReady(false);
+      setTurnstileError(null);
+      setTurnstileToken('local-dev-bypass');
+      return;
+    }
+
+    if (!turnstileSiteKey) {
+      setTurnstileReady(false);
+      setTurnstileError('尚未設定 Cloudflare Turnstile site key，無法送出錯誤回報。');
+      return;
+    }
+
+    let cancelled = false;
+
+    async function ensureTurnstileScript() {
+      if (window.turnstile) {
+        if (!cancelled) setTurnstileReady(true);
+        return;
+      }
+
+      const existingScript = document.querySelector<HTMLScriptElement>('script[data-turnstile-script="true"]');
+      if (existingScript) {
+        existingScript.addEventListener('load', () => {
+          if (!cancelled) setTurnstileReady(true);
+        });
+        existingScript.addEventListener('error', () => {
+          if (!cancelled) setTurnstileError('驗證元件載入失敗，請稍後重整頁面再試。');
+        });
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.async = true;
+      script.defer = true;
+      script.dataset.turnstileScript = 'true';
+      script.onload = () => {
+        if (!cancelled) setTurnstileReady(true);
+      };
+      script.onerror = () => {
+        if (!cancelled) setTurnstileError('驗證元件載入失敗，請稍後重整頁面再試。');
+      };
+      document.head.appendChild(script);
+    }
+
+    ensureTurnstileScript();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requiresTurnstile, turnstileSiteKey]);
+
+  useEffect(() => {
+    if (!requiresTurnstile) return;
+    if (!turnstileReady || !turnstileSiteKey || !turnstileContainerRef.current || !window.turnstile) return;
+    if (turnstileWidgetIdRef.current) return;
+
+    turnstileWidgetIdRef.current = window.turnstile.render(turnstileContainerRef.current, {
+      sitekey: turnstileSiteKey,
+      theme: 'light',
+      language: 'zh-TW',
+      callback: (token: string) => {
+        setTurnstileError(null);
+        setTurnstileToken(token);
+      },
+      'expired-callback': () => {
+        setTurnstileToken('');
+        setTurnstileError('驗證已過期，請重新完成驗證。');
+      },
+      'error-callback': () => {
+        setTurnstileToken('');
+        setTurnstileError('驗證失敗，請再試一次。');
+      },
+    });
+
+    return () => {
+      if (turnstileWidgetIdRef.current && window.turnstile) {
+        window.turnstile.remove(turnstileWidgetIdRef.current);
+        turnstileWidgetIdRef.current = null;
+      }
+    };
+  }, [requiresTurnstile, turnstileReady, turnstileSiteKey]);
 
   const photoPreviews = useMemo(
     () => photos.map((file) => ({ file, url: URL.createObjectURL(file) })),
@@ -160,6 +267,16 @@ export function ReportError() {
       return;
     }
 
+    if (requiresTurnstile && !turnstileSiteKey) {
+      setErrorMessage('尚未設定驗證元件，暫時無法送出回報。');
+      return;
+    }
+
+    if (requiresTurnstile && !turnstileToken) {
+      setErrorMessage('請先完成人機驗證。');
+      return;
+    }
+
     setSubmitting(true);
     setErrorMessage(null);
 
@@ -193,6 +310,7 @@ export function ReportError() {
         reporterPhone,
         description: finalDescription,
         photos,
+        turnstileToken,
       };
 
       await api.submitParishReport(church.id, payload);
@@ -200,6 +318,7 @@ export function ReportError() {
     } catch (error) {
       console.error(error);
       setErrorMessage(error instanceof Error ? error.message : '送出回報失敗，請稍後再試。');
+      resetTurnstile();
     } finally {
       setSubmitting(false);
     }
@@ -466,6 +585,28 @@ export function ReportError() {
           <p className="mt-2 text-right text-xs text-gray-400">{description.length}/2000</p>
         </div>
 
+        {requiresTurnstile ? (
+          <div className="mb-8">
+            <div className="mb-4">
+              <h2 className="text-lg font-bold text-gray-900">送出前驗證</h2>
+              <p className="mt-1 text-sm text-gray-500">請完成 Cloudflare 驗證後再送出，避免機器人大量回報。</p>
+            </div>
+            <div className="rounded-3xl bg-white p-4 ring-1 ring-slate-200">
+              <div ref={turnstileContainerRef} />
+              {turnstileError && (
+                <p className="mt-3 text-sm text-rose-600">{turnstileError}</p>
+              )}
+              {!turnstileError && turnstileToken && (
+                <p className="mt-3 text-sm text-emerald-600">驗證完成，可以送出回報。</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="mb-8 rounded-3xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 ring-1 ring-emerald-100">
+            本機開發模式已略過 Cloudflare 驗證。
+          </div>
+        )}
+
         <div className="mb-8">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
@@ -524,7 +665,7 @@ export function ReportError() {
         <button
           type="submit"
           form="parish-report-form"
-          disabled={submitting}
+          disabled={submitting || (requiresTurnstile && !turnstileSiteKey)}
           className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-medium active:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
         >
           {submitting ? '送出中...' : '送出回報'}

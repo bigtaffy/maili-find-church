@@ -145,6 +145,7 @@ export type ParishReportPayload = {
   reporterPhone?: string;
   description?: string;
   photos?: File[];
+  turnstileToken?: string;
 };
 
 export type PilgrimageVerificationMethod = 'gps' | 'manual';

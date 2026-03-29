@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ArrowRight, Navigation, Loader2, X, Clock3, CloudOff, Database, RefreshCw, MapPin, Phone, Globe, Church } from 'lucide-react';
+import { Search, ArrowRight, Navigation, Loader2, X, Clock3, MapPin, Phone, Globe, Church } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import Map, { Marker, type MapRef, type ViewStateChangeEvent } from 'react-map-gl/maplibre';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -140,41 +140,6 @@ function getFocusCenter(
   };
 }
 
-function SyncBadge({ syncState, onRefresh }: { syncState: OfflineSyncState | null; onRefresh: () => void }) {
-  if (!syncState) return null;
-
-  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-  const label = syncState.ready
-    ? syncState.source === 'remote'
-      ? '資料已同步'
-      : syncState.isStale
-        ? '使用離線資料'
-        : '本地資料可用'
-    : '尚未下載離線資料';
-
-  return (
-    <div className="bg-white/95 backdrop-blur rounded-2xl shadow-sm px-4 py-3 flex items-center justify-between gap-3">
-      <div className="flex items-center gap-2 min-w-0">
-        {isOffline ? <CloudOff className="w-4 h-4 text-amber-600" /> : <Database className="w-4 h-4 text-emerald-600" />}
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-gray-800">{label}</p>
-          <p className="text-[11px] text-gray-500 truncate">
-            {syncState.version ? `版本 ${syncState.version}` : '首次開啟後會快取完整教堂資料包'}
-          </p>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={onRefresh}
-        className="shrink-0 rounded-full bg-slate-100 p-2 text-slate-600 active:bg-slate-200"
-        aria-label="重新同步"
-      >
-        <RefreshCw className="w-4 h-4" />
-      </button>
-    </div>
-  );
-}
-
 export function Home() {
   const { currentView } = useAppView();
   const navigate = useNavigate();
@@ -193,7 +158,6 @@ export function Home() {
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [syncState, setSyncState] = useState<OfflineSyncState | null>(null);
-  const [showSyncToast, setShowSyncToast] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [sheetMode, setSheetMode] = useState<'hidden' | 'collapsed' | 'expanded'>('collapsed');
   const [viewState, setViewState] = useState({
@@ -210,6 +174,7 @@ export function Home() {
   const hasUserExploredMapRef = useRef(false);
   const skipNextLocationEffectRef = useRef(false);
   const isProgrammaticCameraMoveRef = useRef(false);
+  const knownSyncVersionRef = useRef<number | null>(null);
   const isNarrowViewport = viewportWidth <= 360;
 
   useEffect(() => {
@@ -290,21 +255,20 @@ export function Home() {
   }
 
   useEffect(() => {
-    if (!syncState) return;
+    if (!syncState?.version) return;
 
-    const shouldPersist = syncState.isStale || syncState.source === 'none' || Boolean(syncState.error);
-    if (shouldPersist) {
-      setShowSyncToast(true);
-      return;
+    const previousVersion = knownSyncVersionRef.current;
+    const isNewDownload =
+      syncState.source === 'remote' &&
+      previousVersion != null &&
+      syncState.version > previousVersion;
+
+    knownSyncVersionRef.current = syncState.version;
+
+    if (isNewDownload && typeof window !== 'undefined') {
+      window.alert(`教堂資料已更新到最新版本（v${syncState.version}）。`);
     }
-
-    setShowSyncToast(true);
-    const timeoutId = window.setTimeout(() => {
-      setShowSyncToast(false);
-    }, 3500);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [syncState?.version, syncState?.source, syncState?.isStale, syncState?.error]);
+  }, [syncState?.version, syncState?.source]);
 
   async function loadHomeData(
     location: { lat: number; lng: number },
@@ -527,16 +491,6 @@ export function Home() {
     setIsSearchMode(true);
   }
 
-  async function refreshOfflinePackage() {
-    setLoading(true);
-    try {
-      await runSync(true);
-      if (userLocation) await loadHomeData(userLocation);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function refreshChurchesInViewport() {
     if (!mapRef.current || isSearchMode || !hasUserExploredMapRef.current) return;
     const bounds = mapRef.current.getBounds();
@@ -650,8 +604,6 @@ export function Home() {
           </div>
         )}
 
-        {showSyncToast && <SyncBadge syncState={syncState} onRefresh={refreshOfflinePackage} />}
-
         {locationError && (
           <div className="bg-amber-50 text-amber-800 text-xs px-4 py-2 rounded-2xl shadow-sm">
             {locationError}
@@ -744,20 +696,24 @@ export function Home() {
                   </span>
                 </motion.button>
 
-                <motion.button
-                  type="button"
-                  initial={{ bottom: LOCATION_BUTTON_BOTTOM.hidden, opacity: 0 }}
-                  animate={{ bottom: LOCATION_BUTTON_BOTTOM[sheetMode], opacity: 1 }}
-                  exit={{ bottom: LOCATION_BUTTON_BOTTOM.hidden, opacity: 0 }}
-                  transition={SHEET_SPRING}
-                  onClick={() => setSheetMode('hidden')}
-                  className={`absolute z-[1100] flex translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-slate-500 shadow-lg ring-1 ring-slate-200 backdrop-blur active:bg-slate-50 ${
-                    isNarrowViewport ? 'right-3 p-2.5' : 'right-5 p-3'
-                  }`}
-                  aria-label="關閉教堂資訊"
-                >
-                  <X className="h-4 w-4" />
-                </motion.button>
+                <AnimatePresence>
+                  {sheetMode !== 'hidden' && (
+                    <motion.button
+                      type="button"
+                      initial={{ bottom: LOCATION_BUTTON_BOTTOM.hidden, opacity: 0 }}
+                      animate={{ bottom: LOCATION_BUTTON_BOTTOM[sheetMode], opacity: 1 }}
+                      exit={{ bottom: LOCATION_BUTTON_BOTTOM.hidden, opacity: 0 }}
+                      transition={SHEET_SPRING}
+                      onClick={() => setSheetMode('hidden')}
+                      className={`absolute z-[1100] flex translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-slate-500 shadow-lg ring-1 ring-slate-200 backdrop-blur active:bg-slate-50 ${
+                        isNarrowViewport ? 'right-3 p-2.5' : 'right-5 p-3'
+                      }`}
+                      aria-label="關閉教堂資訊"
+                    >
+                      <X className="h-4 w-4" />
+                    </motion.button>
+                  )}
+                </AnimatePresence>
 
                 <motion.div
                   initial={{ y: SHEET_TRANSLATE.hidden }}
@@ -788,8 +744,20 @@ export function Home() {
                             event.currentTarget.src = FALLBACK_CHURCH_IMAGE;
                           }}
                         />
-                        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/96 to-transparent" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-white/86 via-transparent to-white/10" />
+                        <div
+                          className="absolute inset-0"
+                          style={{
+                            background:
+                              'linear-gradient(90deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.9) 34%, rgba(255,255,255,0.4) 62%, rgba(255,255,255,0.06) 100%)',
+                          }}
+                        />
+                        <div
+                          className="absolute inset-0"
+                          style={{
+                            background:
+                              'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.02) 40%, rgba(255,255,255,0.38) 100%)',
+                          }}
+                        />
                       </>
                     )}
 
