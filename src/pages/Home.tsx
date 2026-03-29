@@ -209,6 +209,7 @@ export function Home() {
   const shouldFocusNearestRef = useRef(true);
   const hasUserExploredMapRef = useRef(false);
   const skipNextLocationEffectRef = useRef(false);
+  const isProgrammaticCameraMoveRef = useRef(false);
   const isNarrowViewport = viewportWidth <= 360;
 
   useEffect(() => {
@@ -268,6 +269,7 @@ export function Home() {
 
   function focusChurchOnMap(church: ParishSummary) {
     if (mapRef.current) {
+      isProgrammaticCameraMoveRef.current = true;
       mapRef.current.easeTo({
         center: [church.longitude, church.latitude],
         duration: 700,
@@ -348,6 +350,7 @@ export function Home() {
             padding,
           }));
 
+          isProgrammaticCameraMoveRef.current = true;
           mapRef.current.easeTo({
             center: [focusCenter.longitude, focusCenter.latitude],
             zoom: focusZoom,
@@ -586,9 +589,18 @@ export function Home() {
     setSheetMode((current) => current);
   }
 
-  function handleUserMapExplore() {
-    if (isSearchMode) return;
+  function handleMapMoveStart() {
+    if (isProgrammaticCameraMoveRef.current || isSearchMode) return;
     hasUserExploredMapRef.current = true;
+  }
+
+  async function handleMapMoveEnd() {
+    if (isProgrammaticCameraMoveRef.current) {
+      isProgrammaticCameraMoveRef.current = false;
+      return;
+    }
+
+    await refreshChurchesInViewport();
   }
 
   return (
@@ -659,9 +671,8 @@ export function Home() {
             mapLib={maplibregl}
             {...viewState}
             onMove={(event: ViewStateChangeEvent) => setViewState(event.viewState)}
-            onDragStart={handleUserMapExplore}
-            onZoomStart={handleUserMapExplore}
-            onMoveEnd={refreshChurchesInViewport}
+            onMoveStart={handleMapMoveStart}
+            onMoveEnd={handleMapMoveEnd}
             minZoom={5.2}
             maxZoom={18}
             reuseMaps
