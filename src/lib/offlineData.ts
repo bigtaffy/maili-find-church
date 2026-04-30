@@ -9,6 +9,7 @@ const STORAGE_KEY = 'maili-offline-snapshot-v1';
 type OfflineParish = {
   id: number;
   name_zh: string;
+  name_local?: string | null;
   name_en?: string | null;
   address?: string | null;
   lat: number;
@@ -93,9 +94,14 @@ type OfflineSnapshot = {
   photos: Array<ParishPhoto & { id?: number; parish_id: number; sort_order?: number | null }>;
 };
 
+type ParishSearchDocument = OfflineParish & {
+  _dioceseNameZh?: string | null;
+  _dioceseNameEn?: string | null;
+};
+
 let inMemorySnapshot: OfflineSnapshot | null = null;
 let inflightSync: Promise<OfflineSyncState> | null = null;
-let parishSearchFuse: Fuse<OfflineParish> | null = null;
+let parishSearchFuse: Fuse<ParishSearchDocument> | null = null;
 
 function canUseStorage() {
   return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
@@ -211,14 +217,26 @@ function requireSnapshot() {
 function getParishSearchFuse() {
   const snapshot = requireSnapshot();
   if (!parishSearchFuse) {
-    parishSearchFuse = new Fuse(snapshot.parishes, {
+    const diocesesById = new Map(snapshot.dioceses.map((diocese) => [diocese.id, diocese]));
+    const documents: ParishSearchDocument[] = snapshot.parishes.map((parish) => {
+      const diocese = parish.diocese_id != null ? diocesesById.get(parish.diocese_id) : null;
+      return {
+        ...parish,
+        _dioceseNameZh: diocese?.name_zh ?? null,
+        _dioceseNameEn: diocese?.name_en ?? null,
+      };
+    });
+    parishSearchFuse = new Fuse(documents, {
       includeScore: true,
       threshold: 0.38,
       ignoreLocation: true,
       minMatchCharLength: 1,
       keys: [
         { name: 'name_zh', weight: 0.5 },
+        { name: 'name_local', weight: 0.4 },
+        { name: '_dioceseNameZh', weight: 0.4 },
         { name: 'name_en', weight: 0.3 },
+        { name: '_dioceseNameEn', weight: 0.2 },
         { name: 'address', weight: 0.2 },
       ],
     });
@@ -300,9 +318,11 @@ function getNextOccurrence(rruleString?: string | null, now = new Date()) {
 }
 
 function normalizeSummary(parish: OfflineParish, diocese?: OfflineDiocese | null, distanceKm?: number | null): ParishSummary {
+  const displayName = parish.name_zh || parish.name_local || parish.name_en || '';
   return {
     id: parish.id,
-    name_zh: parish.name_zh,
+    name_zh: displayName,
+    name_local: parish.name_local ?? null,
     name_en: parish.name_en ?? null,
     address: parish.address ?? null,
     latitude: parish.lat,

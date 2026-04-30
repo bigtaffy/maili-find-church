@@ -1,6 +1,7 @@
 export type ParishSummary = {
   id: number;
   name_zh: string;
+  name_local?: string | null;
   name_en?: string | null;
   address?: string | null;
   latitude: number;
