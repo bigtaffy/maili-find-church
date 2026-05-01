@@ -544,8 +544,9 @@ export function Home() {
   }
 
   function handleMapMoveStart() {
-    if (isProgrammaticCameraMoveRef.current || isSearchMode) return;
+    if (isProgrammaticCameraMoveRef.current) return;
     hasUserExploredMapRef.current = true;
+    if (isSearchMode) setIsSearchMode(false);
   }
 
   async function handleMapMoveEnd() {
