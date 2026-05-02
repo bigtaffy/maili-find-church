@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ArrowRight, Navigation, Loader2, X, Clock3, MapPin, Phone, Globe, Church } from 'lucide-react';
+import { Search, ArrowRight, Navigation, Loader2, X, Clock3, MapPin, Phone, Globe, Church, Heart } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import Map, { Marker, Source, Layer, type MapRef, type ViewStateChangeEvent } from 'react-map-gl/maplibre';
 import type { CircleLayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppView } from '@/components/Layout';
 import { api, type OfflineSyncState, type ParishDetail, type ParishSummary, type UpcomingMass } from '@/lib/api';
-import { getAllParishesAsGeoJSON, getParishSummaryById } from '@/lib/offlineData';
+import { getAllParishesAsGeoJSON, getNearbyParishesOffline, getParishSummaryById } from '@/lib/offlineData';
+import { hasPilgrimageStamp } from '@/lib/pilgrimageStorage';
+import { useFavorites } from '@/lib/useFavorites';
 import { getMassDisplayTitle, sortMassTimes } from '@/lib/utils';
 
 const FALLBACK_LOCATION = { lat: 25.0478, lng: 121.517 };
@@ -184,6 +186,7 @@ function getFocusCenter(
 export function Home() {
   const { currentView } = useAppView();
   const navigate = useNavigate();
+  const { isFavorite, toggleFavorite } = useFavorites();
 
   const [parishGeoJSON, setParishGeoJSON] = useState<GeoJSON.FeatureCollection>(() => getAllParishesAsGeoJSON());
   const [listItems, setListItems] = useState<UpcomingMass[]>([]);
@@ -199,6 +202,8 @@ export function Home() {
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [syncState, setSyncState] = useState<OfflineSyncState | null>(null);
+  const [wishPromptChurch, setWishPromptChurch] = useState<ParishSummary | null>(null);
+  const wishPromptDismissedRef = useRef(false);
   const [isLocating, setIsLocating] = useState(false);
   const [sheetMode, setSheetMode] = useState<'hidden' | 'collapsed' | 'expanded'>('collapsed');
   const [viewState, setViewState] = useState({
@@ -424,6 +429,17 @@ export function Home() {
     const focusNearest = shouldFocusNearestRef.current;
     shouldFocusNearestRef.current = false;
     loadHomeData(userLocation, { focusNearest });
+  }, [userLocation]);
+
+  useEffect(() => {
+    if (!userLocation || wishPromptDismissedRef.current) return;
+    try {
+      const nearby = getNearbyParishesOffline(userLocation.lat, userLocation.lng, 0.1, 5);
+      const unvisited = nearby.find((p) => !hasPilgrimageStamp(p.id));
+      setWishPromptChurch(unvisited ?? null);
+    } catch {
+      // snapshot not ready yet, skip
+    }
   }, [userLocation]);
 
   useEffect(() => {
@@ -737,6 +753,49 @@ export function Home() {
           </Map>
 
           <AnimatePresence>
+            {wishPromptChurch && (
+              <motion.div
+                key="wish-prompt"
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 16 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+                className="absolute left-4 right-4 z-[1100]"
+                style={{ bottom: `calc(${COLLAPSED_SHEET_VISIBLE_HEIGHT} + 4.5rem + env(safe-area-inset-bottom, 0px))` }}
+              >
+                <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-lg ring-1 ring-emerald-100">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50">
+                    <Church className="h-4 w-4 text-emerald-600" strokeWidth={2.2} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-slate-900 truncate">
+                      你可以在{wishPromptChurch.name_zh}許願了
+                    </p>
+                    <p className="text-[11px] text-slate-400">到訪此教堂即可許下三個心願</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/church/${wishPromptChurch.id}`)}
+                    className="shrink-0 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white active:bg-emerald-700"
+                  >
+                    前往
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      wishPromptDismissedRef.current = true;
+                      setWishPromptChurch(null);
+                    }}
+                    className="shrink-0 p-1 text-slate-300 active:text-slate-500"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
             {selectedChurch && (
               <>
                 <motion.button
@@ -878,6 +937,21 @@ export function Home() {
                           }`}
                         >
                           查看詳情 <ArrowRight className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleFavorite(selectedChurch.id)}
+                          className={`flex items-center justify-center rounded-full ring-1 transition-colors active:scale-90 ${
+                            isFavorite(selectedChurch.id)
+                              ? 'bg-red-50 ring-red-200 text-red-500'
+                              : 'bg-white ring-slate-200 text-slate-400'
+                          } ${isNarrowViewport ? 'h-8 w-8' : 'h-10 w-10'}`}
+                          aria-label={isFavorite(selectedChurch.id) ? '移除收藏' : '加入收藏'}
+                        >
+                          <Heart
+                            className={isNarrowViewport ? 'h-4 w-4' : 'h-5 w-5'}
+                            fill={isFavorite(selectedChurch.id) ? 'currentColor' : 'none'}
+                          />
                         </button>
                       </div>
                     </div>

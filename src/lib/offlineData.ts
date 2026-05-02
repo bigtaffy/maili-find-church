@@ -2,6 +2,12 @@ import Fuse from 'fuse.js';
 import { RRule, datetime } from 'rrule';
 import type { MassTime, OfflineSyncState, ParishDetail, ParishPhoto, ParishSummary, Priest, UpcomingMass } from './types';
 
+const LANGUAGE_NAMES: Record<string, string> = {
+  ja: '日語', ko: '韓語', zh: '國語', 'zh-TW': '國語', 'zh-CN': '普通話',
+  en: '英語', vi: '越南語', fr: '法語', la: '拉丁語',
+  pt: '葡萄牙語', es: '西班牙語', tl: '他加祿語', id: '印尼語',
+};
+
 const SYNC_BASE_URL = 'https://maili-news-scrapper.chihhe.dev';
 const SYNC_VERSION_URL = `${SYNC_BASE_URL}/api/v1/sync/version`;
 const SYNC_DOWNLOAD_URL = `${SYNC_BASE_URL}/api/v1/sync/download`;
@@ -365,7 +371,7 @@ function normalizeMassTime(
     human_readable: buildHumanReadableRRule(massTime.rrule),
     dtstart: getNextOccurrence(massTime.rrule)?.toISOString() ?? null,
     duration_minutes: massTime.duration_minutes ?? null,
-    language: language?.name_zh ?? massTime.language ?? null,
+    language: language?.name_zh ?? (massTime.language ? (LANGUAGE_NAMES[massTime.language] ?? massTime.language) : null),
     label,
     location_note: massTime.location_note ?? null,
     remarks: massTime.remarks ?? null,
