@@ -2,10 +2,12 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, ArrowRight, Navigation, Loader2, X, Clock3, MapPin, Phone, Globe, Church } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
-import Map, { Marker, type MapRef, type ViewStateChangeEvent } from 'react-map-gl/maplibre';
+import Map, { Marker, Source, Layer, type MapRef, type ViewStateChangeEvent } from 'react-map-gl/maplibre';
+import type { CircleLayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppView } from '@/components/Layout';
 import { api, type OfflineSyncState, type ParishDetail, type ParishSummary, type UpcomingMass } from '@/lib/api';
+import { getAllParishesAsGeoJSON, getParishSummaryById } from '@/lib/offlineData';
 import { getMassDisplayTitle, sortMassTimes } from '@/lib/utils';
 
 const FALLBACK_LOCATION = { lat: 25.0478, lng: 121.517 };
@@ -33,6 +35,45 @@ const SHEET_SPRING = {
   stiffness: 260,
   damping: 34,
   mass: 0.9,
+};
+
+const CLUSTER_LAYER: CircleLayerSpecification = {
+  id: 'clusters',
+  type: 'circle',
+  source: 'churches',
+  filter: ['has', 'point_count'],
+  paint: {
+    'circle-color': ['step', ['get', 'point_count'], '#10b981', 10, '#3b82f6', 50, '#8b5cf6'],
+    'circle-radius': ['step', ['get', 'point_count'], 22, 10, 32, 50, 44],
+    'circle-stroke-width': 2,
+    'circle-stroke-color': '#fff',
+  },
+};
+
+const CLUSTER_COUNT_LAYER: SymbolLayerSpecification = {
+  id: 'cluster-count',
+  type: 'symbol',
+  source: 'churches',
+  filter: ['has', 'point_count'],
+  layout: {
+    'text-field': '{point_count_abbreviated}',
+    'text-font': ['Open Sans Bold'],
+    'text-size': 13,
+  },
+  paint: { 'text-color': '#ffffff' },
+};
+
+const UNCLUSTERED_LAYER: CircleLayerSpecification = {
+  id: 'unclustered-point',
+  type: 'circle',
+  source: 'churches',
+  filter: ['!', ['has', 'point_count']],
+  paint: {
+    'circle-color': '#10b981',
+    'circle-radius': 8,
+    'circle-stroke-width': 2,
+    'circle-stroke-color': '#ffffff',
+  },
 };
 
 function formatDistance(distanceKm?: number | null, address?: string | null) {
@@ -144,7 +185,7 @@ export function Home() {
   const { currentView } = useAppView();
   const navigate = useNavigate();
 
-  const [nearbyChurches, setNearbyChurches] = useState<ParishSummary[]>([]);
+  const [parishGeoJSON, setParishGeoJSON] = useState<GeoJSON.FeatureCollection>(() => getAllParishesAsGeoJSON());
   const [listItems, setListItems] = useState<UpcomingMass[]>([]);
   const [selectedChurch, setSelectedChurch] = useState<ParishSummary | null>(null);
   const [selectedChurchDetail, setSelectedChurchDetail] = useState<ParishDetail | null>(null);
@@ -186,6 +227,12 @@ export function Home() {
 
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    if (syncState?.version) {
+      setParishGeoJSON(getAllParishesAsGeoJSON());
+    }
+  }, [syncState?.version]);
 
   function requestDeviceGpsLocation() {
     if (!navigator.geolocation) {
@@ -287,7 +334,6 @@ export function Home() {
       ]);
       const nearestChurch = nearbyRes.data?.[0] ?? null;
       setNearestChurchId(nearestChurch?.id ?? null);
-      setNearbyChurches(focusNearest && nearestChurch ? [nearestChurch] : nearbyRes.data || []);
       setListItems(upcomingRes.data || []);
       setSelectedChurch((current) => {
         if (focusNearest) return nearestChurch;
@@ -445,7 +491,6 @@ export function Home() {
       await runSync(false);
       const res = await api.searchParishes(keyword, 1, 20);
       setSearchSuggestions([]);
-      setNearbyChurches(res.data || []);
       setSelectedChurch(res.data?.[0] ?? null);
       setListItems(
         (res.data || []).map((parish) => ({
@@ -475,7 +520,6 @@ export function Home() {
     setSearchSuggestions([]);
     setIsSearchInputFocused(false);
     searchInputRef.current?.blur();
-    setNearbyChurches([parish]);
     setSelectedChurch(parish);
     focusChurchOnMap(parish);
     setSheetMode('collapsed');
@@ -493,26 +537,51 @@ export function Home() {
 
   async function refreshChurchesInViewport() {
     if (!mapRef.current || isSearchMode || !hasUserExploredMapRef.current) return;
-    const bounds = mapRef.current.getBounds();
-    if (!bounds) return;
-
+    const center = mapRef.current.getCenter();
     try {
-      const res = await api.getParishesInBounds(
-        bounds.getWest(),
-        bounds.getSouth(),
-        bounds.getEast(),
-        bounds.getNorth(),
-        1000,
-      );
-      setNearbyChurches(res.data || []);
-      setSelectedChurch((current) => {
-        if (current && res.data.some((church) => church.id === current.id)) {
-          return current;
-        }
-        return res.data[0] ?? null;
-      });
+      const upcomingRes = await api.getUpcomingMasses(center.lat, center.lng, 10, 168, 20);
+      setListItems(upcomingRes.data || []);
     } catch (error) {
-      console.error('Failed to refresh churches in viewport:', error);
+      console.error('Failed to refresh list items:', error);
+    }
+  }
+
+  function handleMapLoad() {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    map.on('mouseenter', 'clusters', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = ''; });
+    map.on('mouseenter', 'unclustered-point', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'unclustered-point', () => { map.getCanvas().style.cursor = ''; });
+  }
+
+  function handleMapClick(e: maplibregl.MapMouseEvent) {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+
+    const features = map.queryRenderedFeatures(e.point, {
+      layers: ['unclustered-point', 'clusters'],
+    });
+    if (!features.length) return;
+
+    const feature = features[0];
+
+    if (feature.layer.id === 'clusters') {
+      const clusterId = feature.properties?.cluster_id as number;
+      const source = map.getSource('churches') as maplibregl.GeoJSONSource;
+      source.getClusterExpansionZoom(clusterId).then((zoom) => {
+        const coords = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
+        isProgrammaticCameraMoveRef.current = true;
+        map.easeTo({ center: coords, zoom, duration: 500 });
+      }).catch(() => {});
+    } else {
+      const parishId = feature.properties?.id as number;
+      const summary = getParishSummaryById(parishId);
+      if (!summary) return;
+      setSelectedChurch(summary);
+      focusChurchOnMap(summary);
+      setSheetMode('collapsed');
+      setIsSearchMode(false);
     }
   }
 
@@ -626,6 +695,8 @@ export function Home() {
             onMove={(event: ViewStateChangeEvent) => setViewState(event.viewState)}
             onMoveStart={handleMapMoveStart}
             onMoveEnd={handleMapMoveEnd}
+            onLoad={handleMapLoad}
+            onClick={handleMapClick}
             minZoom={5.2}
             maxZoom={18}
             reuseMaps
@@ -636,41 +707,33 @@ export function Home() {
               <div className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 ring-4 ring-blue-200" />
             </Marker>
 
-            {nearbyChurches.map((church) => (
-              <Marker key={church.id} longitude={church.longitude} latitude={church.latitude} anchor="bottom">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedChurch(church);
-                    focusChurchOnMap(church);
-                  }}
-                  className="group"
-                >
-                  {selectedChurch?.id === church.id ? (
-                    <motion.div
-                      animate={{ y: [0, -4, 0] }}
-                      transition={{ duration: 2.2, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' }}
-                      className="flex items-center gap-2 rounded-full bg-white/96 pr-3 pl-2 py-1.5 text-xs font-semibold text-slate-900 shadow-lg ring-1 ring-blue-100 transition"
-                    >
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm ring-4 ring-blue-200/70">
-                        <Church className="h-4.5 w-4.5" strokeWidth={2.2} />
-                      </div>
-                      <span className="max-w-32 truncate">{church.name_zh}</span>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      animate={{ y: [0, -2, 0] }}
-                      transition={{ duration: 2.8, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut', delay: (church.id % 5) * 0.12 }}
-                      className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-600/18 p-1 shadow-[0_8px_20px_rgba(15,23,42,0.12)] transition group-active:scale-95"
-                    >
-                      <div className="flex h-full w-full items-center justify-center rounded-full border border-white/80 bg-emerald-600 text-white ring-2 ring-emerald-100/80">
-                        <Church className="h-5 w-5" strokeWidth={2.2} />
-                      </div>
-                    </motion.div>
-                  )}
-                </button>
+            <Source
+              id="churches"
+              type="geojson"
+              data={parishGeoJSON}
+              cluster={true}
+              clusterMaxZoom={13}
+              clusterRadius={50}
+            >
+              <Layer {...CLUSTER_LAYER} />
+              <Layer {...CLUSTER_COUNT_LAYER} />
+              <Layer {...UNCLUSTERED_LAYER} />
+            </Source>
+
+            {selectedChurch && (
+              <Marker
+                longitude={selectedChurch.longitude}
+                latitude={selectedChurch.latitude}
+                anchor="bottom"
+              >
+                <div className="flex items-center gap-2 rounded-full bg-white/96 pr-3 pl-2 py-1.5 text-xs font-semibold text-slate-900 shadow-lg ring-1 ring-blue-100">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white">
+                    <Church className="h-4 w-4" strokeWidth={2.2} />
+                  </div>
+                  <span className="max-w-32 truncate">{selectedChurch.name_zh}</span>
+                </div>
               </Marker>
-            ))}
+            )}
           </Map>
 
           <AnimatePresence>

@@ -382,6 +382,38 @@ export function hasOfflineSnapshot() {
   return Boolean(loadSnapshotFromStorage());
 }
 
+export function getOfflineSnapshot() {
+  return loadSnapshotFromStorage();
+}
+
+export function getParishSummaryById(id: number): ParishSummary | null {
+  const snapshot = loadSnapshotFromStorage();
+  if (!snapshot) return null;
+  const parish = snapshot.parishes.find((p) => p.id === id);
+  if (!parish) return null;
+  const diocesesById = new Map(snapshot.dioceses.map((d) => [d.id, d]));
+  return normalizeSummary(parish, diocesesById.get(parish.diocese_id ?? -1) ?? null);
+}
+
+export function getAllParishesAsGeoJSON(): GeoJSON.FeatureCollection {
+  const snapshot = loadSnapshotFromStorage();
+  if (!snapshot) return { type: 'FeatureCollection', features: [] };
+  return {
+    type: 'FeatureCollection',
+    features: snapshot.parishes
+      .filter((p) => p.lat != null && p.lng != null)
+      .map((p) => ({
+        type: 'Feature' as const,
+        geometry: { type: 'Point' as const, coordinates: [p.lng!, p.lat!] },
+        properties: {
+          id: p.id,
+          name_zh: p.name_zh ?? p.name_local ?? p.name_en ?? '',
+          diocese_id: p.diocese_id ?? null,
+        },
+      })),
+  };
+}
+
 export function searchParishesOffline(query: string, page = 1, perPage = 20): ParishSummary[] {
   const snapshot = requireSnapshot();
   const diocesesById = new Map(snapshot.dioceses.map((item) => [item.id, item]));
