@@ -216,7 +216,7 @@ export function ChurchDetail() {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
         <p className="text-gray-500 mb-4">{error || '找不到此教堂'}</p>
-        <button onClick={() => navigate(-1)} className="bg-blue-600 text-white px-6 py-2 rounded-full">
+        <button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} className="bg-blue-600 text-white px-6 py-2 rounded-full">
           返回上一頁
         </button>
       </div>
@@ -322,7 +322,7 @@ export function ChurchDetail() {
           }}
         />
         <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/50 to-transparent">
-          <button onClick={() => navigate(-1)} className="p-2 text-white">
+          <button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} className="p-2 text-white">
             <ArrowLeft className="w-6 h-6" />
           </button>
           <button onClick={() => toggleFavorite(church.id)} className="p-2 text-white">

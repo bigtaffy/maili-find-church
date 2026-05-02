@@ -83,9 +83,11 @@ async function tryFetchJson<T>(url: string): Promise<T> {
   return res.json();
 }
 
-async function parseJsonSafely(response: Response) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function parseJsonSafely(response: Response): Promise<Record<string, any> | null> {
   try {
-    return await response.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return await response.json() as Record<string, any>;
   } catch {
     return null;
   }
@@ -342,7 +344,8 @@ export const api = {
     });
 
     if (response.ok) {
-      return { data: await response.json().then((json) => json.data) };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { data: await response.json().then((json: any) => json.data) };
     }
 
     const errorBody = await parseJsonSafely(response);

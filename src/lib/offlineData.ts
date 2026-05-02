@@ -363,7 +363,7 @@ function normalizeMassTime(
 ): MassTime {
   const language = massTime.language ? languagesById.get(Number(massTime.language)) : null;
   const massType = massTime.mass_type_id != null ? massTypesById.get(Number(massTime.mass_type_id)) : null;
-  const label = massTime.label ?? language?.name_zh ?? null;
+  const label = massTime.label ?? null;
 
   return {
     id: massTime.id,
