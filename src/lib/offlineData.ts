@@ -2,8 +2,9 @@ import Fuse from 'fuse.js';
 import { RRule, datetime } from 'rrule';
 import type { MassTime, OfflineSyncState, ParishDetail, ParishPhoto, ParishSummary, Priest, UpcomingMass } from './types';
 
-const SYNC_VERSION_URL = 'https://maili-news-scrapper.chihhe.dev/api/v1/sync/version';
-const SYNC_DOWNLOAD_URL = 'https://maili-news-scrapper.chihhe.dev/api/v1/sync/download';
+const SYNC_BASE_URL = 'https://maili-news-scrapper.chihhe.dev';
+const SYNC_VERSION_URL = `${SYNC_BASE_URL}/api/v1/sync/version`;
+const SYNC_DOWNLOAD_URL = `${SYNC_BASE_URL}/api/v1/sync/download`;
 const STORAGE_KEY = 'maili-offline-snapshot-v1';
 
 type OfflineParish = {
@@ -165,6 +166,15 @@ async function fetchJson<T>(url: string): Promise<T> {
   return res.json();
 }
 
+// 優先抓 CDN 靜態檔（immutable、秒回），靜態檔不存在時 fallback 到 API
+async function fetchDownloadPayload(version: number): Promise<OfflineSnapshotPayload> {
+  const staticUrl = `${SYNC_BASE_URL}/data/sync-v${version}.json`;
+  const res = await fetch(staticUrl);
+  if (res.ok) return res.json();
+  // Static file not yet generated (e.g. between deploys) → fall back to API
+  return fetchJson<OfflineSnapshotPayload>(SYNC_DOWNLOAD_URL);
+}
+
 export async function ensureOfflineDataFresh(force = false): Promise<OfflineSyncState> {
   if (inflightSync && !force) return inflightSync;
 
@@ -178,7 +188,7 @@ export async function ensureOfflineDataFresh(force = false): Promise<OfflineSync
     try {
       const versionInfo = await fetchJson<{ version: number; updated_at: string }>(SYNC_VERSION_URL);
       if (!snapshot || force || versionInfo.version > snapshot.version) {
-        const payload = await fetchJson<OfflineSnapshotPayload>(SYNC_DOWNLOAD_URL);
+        const payload = await fetchDownloadPayload(versionInfo.version);
         saveSnapshot(payload);
         return buildSyncState(inMemorySnapshot, { source: 'remote', isStale: false });
       }
