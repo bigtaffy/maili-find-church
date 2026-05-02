@@ -23,6 +23,7 @@ import { clearPilgrimageWish, getPilgrimageStamp, getPilgrimageWishesByParish, s
 import type { PilgrimageStamp, PilgrimageWish, PilgrimageWishSlots, WishStatus } from '@/lib/types';
 import { getLiturgyDisplayTitle, getMassDisplayTitle, getMassSection, sortMassTimes } from '@/lib/utils';
 import { useFavorites } from '@/lib/useFavorites';
+import { triggerBrowserGate } from '@/lib/browserGate';
 
 const FALLBACK_CHURCH_IMAGE =
   'https://images.unsplash.com/photo-1548625361-ec846e2e92c2?auto=format&fit=crop&q=80&w=1200';
@@ -115,6 +116,50 @@ export function ChurchDetail() {
   const [wishDraft, setWishDraft] = useState<string>('');
   const [stampLoading, setStampLoading] = useState(false);
   const [stampError, setStampError] = useState<string | null>(null);
+
+  // Force native browser on direct-link open (independent of App.tsx gate)
+  useEffect(() => {
+    triggerBrowserGate();
+  }, []);
+
+  // Dynamic document title + OG meta tags
+  useEffect(() => {
+    if (!church) return;
+
+    const defaultTitle = '麥力找教堂';
+    const pageTitle = `${church.name_zh} - ${defaultTitle}`;
+    const description = church.address
+      ? `${church.name_zh}，位於 ${church.address}。查看彌撒時間與聯絡資訊。`
+      : `${church.name_zh} 彌撒時間與聯絡資訊。`;
+    const image = church.photos?.[0]?.image_url || FALLBACK_CHURCH_IMAGE;
+    const canonicalUrl = `${window.location.origin}/church/${church.id}`;
+
+    document.title = pageTitle;
+
+    function setMeta(property: string, content: string) {
+      let el = document.querySelector<HTMLMetaElement>(`meta[property="${property}"]`);
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute('property', property);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', content);
+    }
+
+    setMeta('og:title', pageTitle);
+    setMeta('og:description', description);
+    setMeta('og:image', image);
+    setMeta('og:url', canonicalUrl);
+    setMeta('og:type', 'place');
+    setMeta('og:locale', 'zh_TW');
+
+    return () => {
+      document.title = defaultTitle;
+      ['og:title', 'og:description', 'og:image', 'og:url', 'og:type', 'og:locale'].forEach((p) => {
+        document.querySelector(`meta[property="${p}"]`)?.remove();
+      });
+    };
+  }, [church]);
 
   useEffect(() => {
     async function fetchDetail() {

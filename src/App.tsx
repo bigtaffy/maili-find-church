@@ -14,66 +14,9 @@ import { RoutePlanner } from './pages/RoutePlanner';
 import { ReportError } from './pages/ReportError';
 import { Settings } from './pages/Settings';
 import { api } from './lib/api';
-
-const BROWSER_GATE_STORAGE_KEY = 'maili:browser-gate:last-redirect-at';
-const BROWSER_GATE_SUPPRESSION_MS = 10 * 60 * 1000;
-
-function getMobileBrowserGate() {
-  if (typeof navigator === 'undefined' || typeof window === 'undefined') return { blocked: false };
-
-  const ua = navigator.userAgent;
-  const isIPhone = /iPhone|iPad|iPod/i.test(ua);
-  const isAndroid = /Android/i.test(ua);
-  const isMobile = isIPhone || isAndroid;
-
-  if (!isMobile) return { blocked: false };
-
-  const isIOSSafari =
-    isIPhone &&
-    /Safari/i.test(ua) &&
-    !/CriOS|FxiOS|EdgiOS|OPiOS|Instagram|Line|FBAN|FBAV|Messenger/i.test(ua);
-
-  const isIOSChrome = isIPhone && /CriOS/i.test(ua);
-
-  const isAndroidChrome =
-    isAndroid &&
-    /Chrome/i.test(ua) &&
-    !/EdgA|OPR|SamsungBrowser|DuckDuckGo|Instagram|Line|FBAN|FBAV|Messenger/i.test(ua);
-
-  if (isIOSSafari || isIOSChrome || isAndroidChrome) {
-    return { blocked: false };
-  }
-
-  try {
-    const lastRedirectAt = window.localStorage.getItem(BROWSER_GATE_STORAGE_KEY);
-    if (lastRedirectAt) {
-      const elapsed = Date.now() - Number(lastRedirectAt);
-      if (Number.isFinite(elapsed) && elapsed < BROWSER_GATE_SUPPRESSION_MS) {
-        return { blocked: false };
-      }
-    }
-  } catch (error) {
-    console.warn('Failed to read browser gate cache:', error);
-  }
-
-  const currentUrl = window.location.href;
-  const currentWithoutProtocol = currentUrl.replace(/^https?:\/\//i, '');
-
-  return {
-    blocked: true,
-    isIPhone,
-    redirectUrl: isAndroid
-      ? `intent://${currentWithoutProtocol}#Intent;scheme=${window.location.protocol.replace(':', '')};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(currentUrl)};end`
-      : currentUrl.startsWith('https://')
-        ? `googlechromes://${currentWithoutProtocol}`
-        : `googlechrome://${currentWithoutProtocol}`,
-    fallbackUrl: currentUrl,
-  };
-}
+import { triggerBrowserGate } from './lib/browserGate';
 
 export default function App() {
-  const browserGate = getMobileBrowserGate();
-
   useEffect(() => {
     api.syncOfflineData().catch((error) => {
       console.warn('Initial offline sync failed:', error);
@@ -81,22 +24,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!browserGate.blocked) return;
-
-    try {
-      window.localStorage.setItem(BROWSER_GATE_STORAGE_KEY, String(Date.now()));
-    } catch (error) {
-      console.warn('Failed to cache browser redirect timestamp:', error);
-    }
-
-    window.location.replace(browserGate.redirectUrl);
-
-    const fallbackTimer = window.setTimeout(() => {
-      window.location.replace(browserGate.fallbackUrl);
-    }, 1200);
-
-    return () => window.clearTimeout(fallbackTimer);
-  }, [browserGate]);
+    triggerBrowserGate();
+  }, []);
 
   return (
     <BrowserRouter>
