@@ -2,6 +2,7 @@
 
 const API_BASE = 'https://maili-news-scrapper.chihhe.dev';
 const APP_NAME = '麥力找教堂';
+// Replace with a real 1200×630 branded banner at https://churches.mai-li.app/og-default.jpg
 const DEFAULT_OG_IMAGE =
   'https://images.unsplash.com/photo-1548625361-ec846e2e92c2?auto=format&fit=crop&q=80&w=1200';
 
