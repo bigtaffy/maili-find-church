@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { BottomNav } from '@/components/BottomNav';
 import {
   ArrowLeft,
   Star,
@@ -676,6 +677,7 @@ export function ChurchDetail() {
           </div>
         </div>
       )}
+      <BottomNav />
     </div>
   );
 }
