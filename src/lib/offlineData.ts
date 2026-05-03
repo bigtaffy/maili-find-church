@@ -172,13 +172,16 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-// 優先抓 CDN 靜態檔（immutable、秒回），靜態檔不存在時 fallback 到 API
+// 優先抓 CDN 靜態檔（URL 已帶版本號，瀏覽器可安全 cache），
+// CORS 失敗或 404 時 fallback 到 API（有 CORS header）
 async function fetchDownloadPayload(version: number): Promise<OfflineSnapshotPayload> {
   const staticUrl = `${SYNC_BASE_URL}/data/sync-v${version}.json`;
-  // cache: 'no-store' 繞過 Safari iOS 的積極 HTTP cache
-  const res = await fetch(staticUrl, { cache: 'no-store' });
-  if (res.ok) return res.json();
-  // Static file not yet generated (e.g. between deploys) → fall back to API
+  try {
+    const res = await fetch(staticUrl);
+    if (res.ok) return res.json();
+  } catch {
+    // CORS / network error on static file → fall through to API
+  }
   return fetchJson<OfflineSnapshotPayload>(SYNC_DOWNLOAD_URL, { cache: 'no-store' });
 }
 
