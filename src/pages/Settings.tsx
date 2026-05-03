@@ -18,6 +18,7 @@ export function Settings() {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [localVersion, setLocalVersion] = useState<number | null>(null);
+  const [debugLines, setDebugLines] = useState<string[]>([]);
 
   useEffect(() => {
     setLocalVersion(readLocalVersion());
@@ -32,16 +33,33 @@ export function Settings() {
   async function forceSync() {
     setSyncStatus('syncing');
     setSyncMessage(null);
+    const logs: string[] = [];
     try {
+      // Step 1: check server version
+      logs.push('1. 查詢 server 版本…');
+      setDebugLines([...logs]);
+      const verRes = await fetch('https://maili-news-scrapper.chihhe.dev/api/v1/sync/version', { cache: 'no-store' });
+      const verJson = await verRes.json() as { version: number };
+      logs.push(`   server=${verJson.version} local=${readLocalVersion()}`);
+      setDebugLines([...logs]);
+
+      // Step 2: full sync
+      logs.push('2. 執行 syncOfflineData…');
+      setDebugLines([...logs]);
       const result = await api.syncOfflineData(true);
       setLocalVersion(readLocalVersion());
+      logs.push(`   source=${result.source} ver=${result.version} err=${result.error ?? '-'}`);
+      setDebugLines([...logs]);
+
       if (result.source === 'remote') {
         setSyncMessage(`已更新至版本 ${result.version}`);
       } else {
         setSyncMessage(`已是最新版本（版本 ${result.version}）`);
       }
       setSyncStatus('done');
-    } catch {
+    } catch (e) {
+      logs.push(`ERR: ${e instanceof Error ? e.message : String(e)}`);
+      setDebugLines([...logs]);
       setSyncMessage('同步失敗，請確認網路連線');
       setSyncStatus('error');
     }
@@ -78,6 +96,11 @@ export function Settings() {
             <p className={`mt-3 text-sm text-center ${syncStatus === 'error' ? 'text-rose-600' : 'text-emerald-600'}`}>
               {syncMessage}
             </p>
+          )}
+          {debugLines.length > 0 && (
+            <div className="mt-3 rounded-xl bg-slate-50 p-3 font-mono text-[10px] text-slate-500 break-all">
+              {debugLines.map((l, i) => <div key={i}>{l}</div>)}
+            </div>
           )}
         </div>
 
