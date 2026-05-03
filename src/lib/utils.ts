@@ -103,6 +103,21 @@ export function getMassSection(mass: MassTime): 'sunday' | 'weekday' | 'special'
   return 'special';
 }
 
+// Diocese IDs for Taiwan (1-7), Hong Kong (8), Macau (9)
+// Parishes in these dioceses are Chinese-language by default → no need to show name_local
+const CHINESE_DIOCESE_IDS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+export function shouldShowLocalName(
+  dioceseId: number | null | undefined,
+  nameZh: string,
+  nameLocal: string | null | undefined,
+): boolean {
+  if (!nameLocal || !nameLocal.trim()) return false;
+  if (nameLocal.trim() === nameZh.trim()) return false;
+  if (CHINESE_DIOCESE_IDS.has(dioceseId ?? -1)) return false;
+  return true;
+}
+
 export function getLiturgyDisplayTitle(mass: MassTime) {
   const label = mass.label?.trim();
   const remarks = mass.remarks?.trim();

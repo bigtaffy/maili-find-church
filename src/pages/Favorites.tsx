@@ -4,6 +4,7 @@ import { Heart, ChevronRight, Clock3, Church, MapPin } from 'lucide-react';
 import { useFavorites } from '@/lib/useFavorites';
 import { getParishSummaryById, getUpcomingMassesOffline } from '@/lib/offlineData';
 import type { ParishSummary, UpcomingMass } from '@/lib/api';
+import { shouldShowLocalName } from '@/lib/utils';
 
 type FavoriteChurch = {
   parish: ParishSummary;
@@ -104,6 +105,9 @@ export function Favorites() {
 
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 truncate">{parish.name_zh}</p>
+                    {shouldShowLocalName(parish.diocese?.id, parish.name_zh, parish.name_local) && (
+                      <p className="text-xs text-slate-400 truncate">{parish.name_local}</p>
+                    )}
                     {parish.diocese && (
                       <p className="text-xs text-gray-400 truncate flex items-center gap-1">
                         <MapPin className="h-3 w-3 shrink-0" />

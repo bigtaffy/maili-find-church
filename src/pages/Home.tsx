@@ -10,7 +10,7 @@ import { api, type OfflineSyncState, type ParishDetail, type ParishSummary, type
 import { getAllParishesAsGeoJSON, getNearbyParishesOffline, getParishSummaryById } from '@/lib/offlineData';
 import { hasPilgrimageStamp } from '@/lib/pilgrimageStorage';
 import { useFavorites } from '@/lib/useFavorites';
-import { getMassDisplayTitle, sortMassTimes } from '@/lib/utils';
+import { getMassDisplayTitle, shouldShowLocalName, sortMassTimes } from '@/lib/utils';
 
 const FALLBACK_LOCATION = { lat: 25.0478, lng: 121.517 };
 const FALLBACK_CHURCH_IMAGE =
@@ -681,6 +681,9 @@ export function Home() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-slate-900 line-clamp-1">{parish.name_zh}</p>
+                  {shouldShowLocalName(parish.diocese?.id, parish.name_zh, parish.name_local) && (
+                    <p className="text-xs text-slate-400 line-clamp-1">{parish.name_local}</p>
+                  )}
                   <p className="text-xs text-slate-500 line-clamp-1">
                     {formatDistance(parish.distance_km, parish.address)}
                   </p>
@@ -903,6 +906,9 @@ export function Home() {
                           </span>
                         )}
                       </div>
+                      {shouldShowLocalName(selectedChurch.diocese?.id, selectedChurch.name_zh, selectedChurch.name_local) && (
+                        <p className="text-xs text-slate-400 mb-0.5">{selectedChurch.name_local}</p>
+                      )}
                       <p className={`${isNarrowViewport ? 'text-xs' : 'text-sm'} text-gray-500 mb-1.5`}>
                         {formatDistance(selectedChurch.distance_km, selectedChurch.address)}
                       </p>
@@ -1055,6 +1061,9 @@ export function Home() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-3 mb-1">
                         <h3 className="text-lg font-bold text-gray-900 line-clamp-1">{parish.name_zh}</h3>
+                        {shouldShowLocalName(parish.diocese?.id, parish.name_zh, parish.name_local) && (
+                          <p className="text-xs text-slate-400 line-clamp-1 -mt-0.5">{parish.name_local}</p>
+                        )}
                         {!isSearchMode && parish.id === nearestChurchId && (
                           <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700">
                             最近可參與

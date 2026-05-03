@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { BottomNav } from '@/components/BottomNav';
 import {
@@ -21,7 +21,7 @@ import MapGL, { Marker } from 'react-map-gl/maplibre';
 import { api, type ParishDetail, type UpcomingMass } from '@/lib/api';
 import { clearPilgrimageWish, getPilgrimageStamp, getPilgrimageWishesByParish, savePilgrimageStamp, savePilgrimageWish } from '@/lib/pilgrimageStorage';
 import type { PilgrimageStamp, PilgrimageWish, PilgrimageWishSlots, WishStatus } from '@/lib/types';
-import { getLiturgyDisplayTitle, getMassDisplayTitle, getMassSection, sortMassTimes } from '@/lib/utils';
+import { getLiturgyDisplayTitle, getMassDisplayTitle, getMassSection, shouldShowLocalName, sortMassTimes } from '@/lib/utils';
 import { useFavorites } from '@/lib/useFavorites';
 import { triggerBrowserGate } from '@/lib/browserGate';
 
@@ -224,7 +224,23 @@ export function ChurchDetail() {
   }
 
   const isFav = isFavorite(church.id);
-  const mainImage = church.photos?.[0]?.image_url || FALLBACK_CHURCH_IMAGE;
+  const photos = church.photos?.length ? church.photos : [{ image_url: FALLBACK_CHURCH_IMAGE, description: null }];
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const [photoVisible, setPhotoVisible] = useState(true);
+  const photoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (photos.length <= 1) return;
+    const tick = () => {
+      setPhotoVisible(false);
+      photoTimerRef.current = setTimeout(() => {
+        setPhotoIndex((i) => (i + 1) % photos.length);
+        setPhotoVisible(true);
+      }, 600); // fade-out duration
+    };
+    const interval = setInterval(tick, 2600); // 2s visible + 0.6s fade
+    return () => { clearInterval(interval); if (photoTimerRef.current) clearTimeout(photoTimerRef.current); };
+  }, [photos.length]);
   const sundayMasses = sortMassTimes(church.mass_times?.filter((m) => getMassSection(m) === 'sunday') || []);
   const weekdayMasses = sortMassTimes(church.mass_times?.filter((m) => getMassSection(m) === 'weekday') || []);
   const specialMasses = sortMassTimes(church.mass_times?.filter((m) => getMassSection(m) === 'special') || []);
@@ -312,15 +328,21 @@ export function ChurchDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="relative h-64">
+      <div className="relative h-64 overflow-hidden">
         <img
-          src={mainImage}
+          src={photos[photoIndex]?.image_url || FALLBACK_CHURCH_IMAGE}
           alt={church.name_zh}
-          className="w-full h-full object-cover"
-          onError={(event) => {
-            event.currentTarget.src = FALLBACK_CHURCH_IMAGE;
-          }}
+          className="w-full h-full object-cover transition-opacity duration-500"
+          style={{ opacity: photoVisible ? 1 : 0 }}
+          onError={(event) => { event.currentTarget.src = FALLBACK_CHURCH_IMAGE; }}
         />
+        {photos.length > 1 && (
+          <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+            {photos.map((_, i) => (
+              <span key={i} className={`block h-1.5 rounded-full transition-all duration-300 ${i === photoIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50'}`} />
+            ))}
+          </div>
+        )}
         <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/50 to-transparent">
           <button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} className="p-2 text-white">
             <ArrowLeft className="w-6 h-6" />
@@ -333,7 +355,10 @@ export function ChurchDetail() {
 
       <div className="px-4 py-6 -mt-6 relative z-10">
         <div className="bg-white rounded-2xl p-6 shadow-sm mb-4">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">{church.name_zh}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">{church.name_zh}</h1>
+          {shouldShowLocalName(church.diocese?.id, church.name_zh, church.name_local) && (
+            <p className="text-sm text-slate-400 mb-1">{church.name_local}</p>
+          )}
           <p className="text-sm text-gray-500 mb-4">{church.address}</p>
 
           <div className="rounded-2xl bg-slate-50 p-4 mb-5">
