@@ -1,10 +1,27 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { clearPilgrimageStamps, clearPilgrimageUiState, clearPilgrimageWishes } from '@/lib/pilgrimageStorage';
 import { api } from '@/lib/api';
+
+const SNAPSHOT_KEY = 'maili-offline-snapshot-v1';
+
+function readLocalVersion(): number | null {
+  try {
+    const raw = localStorage.getItem(SNAPSHOT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw)?.version ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export function Settings() {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [localVersion, setLocalVersion] = useState<number | null>(null);
+
+  useEffect(() => {
+    setLocalVersion(readLocalVersion());
+  }, []);
 
   function clearPilgrimageData() {
     clearPilgrimageStamps();
@@ -17,10 +34,11 @@ export function Settings() {
     setSyncMessage(null);
     try {
       const result = await api.syncOfflineData(true);
+      setLocalVersion(readLocalVersion());
       if (result.source === 'remote') {
         setSyncMessage(`已更新至版本 ${result.version}`);
       } else {
-        setSyncMessage('已是最新版本');
+        setSyncMessage(`已是最新版本（版本 ${result.version}）`);
       }
       setSyncStatus('done');
     } catch {
@@ -44,7 +62,10 @@ export function Settings() {
 
         <div className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-100">
           <h2 className="text-base font-semibold text-slate-900 mb-1">教堂資料</h2>
-          <p className="text-sm text-slate-500 mb-4">如果看不到最新教堂或彌撒時間，可手動重新同步。</p>
+          <p className="text-sm text-slate-500 mb-3">如果看不到最新教堂或彌撒時間，可手動重新同步。</p>
+          {localVersion !== null && (
+            <p className="text-xs text-slate-400 mb-4">本地快取版本：{localVersion}</p>
+          )}
           <button
             type="button"
             onClick={forceSync}
