@@ -166,8 +166,8 @@ function saveSnapshot(payload: OfflineSnapshotPayload) {
   parishSearchFuse = null;
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, options);
   if (!res.ok) throw new Error(`Request failed: ${url}`);
   return res.json();
 }
@@ -175,10 +175,11 @@ async function fetchJson<T>(url: string): Promise<T> {
 // 優先抓 CDN 靜態檔（immutable、秒回），靜態檔不存在時 fallback 到 API
 async function fetchDownloadPayload(version: number): Promise<OfflineSnapshotPayload> {
   const staticUrl = `${SYNC_BASE_URL}/data/sync-v${version}.json`;
-  const res = await fetch(staticUrl);
+  // cache: 'no-store' 繞過 Safari iOS 的積極 HTTP cache
+  const res = await fetch(staticUrl, { cache: 'no-store' });
   if (res.ok) return res.json();
   // Static file not yet generated (e.g. between deploys) → fall back to API
-  return fetchJson<OfflineSnapshotPayload>(SYNC_DOWNLOAD_URL);
+  return fetchJson<OfflineSnapshotPayload>(SYNC_DOWNLOAD_URL, { cache: 'no-store' });
 }
 
 export async function ensureOfflineDataFresh(force = false): Promise<OfflineSyncState> {
@@ -192,7 +193,7 @@ export async function ensureOfflineDataFresh(force = false): Promise<OfflineSync
     }
 
     try {
-      const versionInfo = await fetchJson<{ version: number; updated_at: string }>(SYNC_VERSION_URL);
+      const versionInfo = await fetchJson<{ version: number; updated_at: string }>(SYNC_VERSION_URL, { cache: 'no-store' });
       if (!snapshot || force || versionInfo.version > snapshot.version) {
         const payload = await fetchDownloadPayload(versionInfo.version);
         saveSnapshot(payload);
