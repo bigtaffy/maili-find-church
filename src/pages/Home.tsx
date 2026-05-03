@@ -913,29 +913,7 @@ export function Home() {
                         {formatDistance(selectedChurch.distance_km, selectedChurch.address)}
                       </p>
 
-                      <div className={`rounded-2xl ${isNarrowViewport ? 'px-2.5 py-2' : 'px-3 py-2.5'} mb-1.5 min-w-0 ${sheetMode === 'expanded' ? 'bg-slate-50' : 'bg-white/78 backdrop-blur-sm shadow-sm'}`}>
-                        <div className="flex items-center gap-2 text-slate-700 mb-1">
-                          <Clock3 className="w-4 h-4" />
-                          <span className="text-xs font-semibold">最近彌撒</span>
-                        </div>
-                        {selectedChurchUpcomingMass?.mass_time ? (
-                          <div>
-                            <p className={`${isNarrowViewport ? 'text-[13px]' : 'text-sm'} font-medium text-slate-900 line-clamp-2 leading-snug`}>
-                              {getMassDisplayTitle(selectedChurchUpcomingMass.mass_time)}
-                            </p>
-                            <p className={`${isNarrowViewport ? 'text-[11px]' : 'text-xs'} text-slate-600 line-clamp-2 leading-snug`}>
-                              {formatMassCountdown(selectedChurchUpcomingMass.minutes_away) || '近期開放中'}
-                              {selectedChurchUpcomingMass.mass_time.label
-                                ? ` ・ ${selectedChurchUpcomingMass.mass_time.label}`
-                                : ''}
-                            </p>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-500">尚未找到近期彌撒，進入詳情可查看固定彌撒時間</span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 mb-1.5">
                         <button
                           onClick={() => navigate(`/church/${selectedChurch.id}`)}
                           className={`bg-blue-600 text-white rounded-full font-medium flex items-center gap-2 active:bg-blue-700 transition-colors ${
@@ -959,6 +937,28 @@ export function Home() {
                             fill={isFavorite(selectedChurch.id) ? 'currentColor' : 'none'}
                           />
                         </button>
+                      </div>
+
+                      <div className={`rounded-2xl ${isNarrowViewport ? 'px-2.5 py-2' : 'px-3 py-2.5'} min-w-0 ${sheetMode === 'expanded' ? 'bg-slate-50' : 'bg-white/78 backdrop-blur-sm shadow-sm'}`}>
+                        <div className="flex items-center gap-2 text-slate-700 mb-1">
+                          <Clock3 className="w-4 h-4" />
+                          <span className="text-xs font-semibold">最近彌撒</span>
+                        </div>
+                        {selectedChurchUpcomingMass?.mass_time ? (
+                          <div>
+                            <p className={`${isNarrowViewport ? 'text-[13px]' : 'text-sm'} font-medium text-slate-900 line-clamp-2 leading-snug`}>
+                              {getMassDisplayTitle(selectedChurchUpcomingMass.mass_time)}
+                            </p>
+                            <p className={`${isNarrowViewport ? 'text-[11px]' : 'text-xs'} text-slate-600 line-clamp-2 leading-snug`}>
+                              {formatMassCountdown(selectedChurchUpcomingMass.minutes_away) || '近期開放中'}
+                              {selectedChurchUpcomingMass.mass_time.label
+                                ? ` ・ ${selectedChurchUpcomingMass.mass_time.label}`
+                                : ''}
+                            </p>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-500">尚未找到近期彌撒，進入詳情可查看固定彌撒時間</span>
+                        )}
                       </div>
                     </div>
                   </div>
