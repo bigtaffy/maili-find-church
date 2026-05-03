@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { clearPilgrimageStamps, clearPilgrimageUiState, clearPilgrimageWishes } from '@/lib/pilgrimageStorage';
 import { api } from '@/lib/api';
+import { clearSnapshotCache } from '@/lib/offlineData';
 
 const SNAPSHOT_KEY = 'maili-offline-snapshot-v1';
 
@@ -110,7 +111,7 @@ export function Settings() {
           <button
             type="button"
             onClick={() => {
-              localStorage.removeItem(SNAPSHOT_KEY);
+              clearSnapshotCache();
               setLocalVersion(null);
               setSyncMessage(null);
               setSyncStatus('idle');

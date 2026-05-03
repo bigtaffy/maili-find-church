@@ -108,11 +108,54 @@ type ParishSearchDocument = OfflineParish & {
 
 let inMemorySnapshot: OfflineSnapshot | null = null;
 let inflightSync: Promise<OfflineSyncState> | null = null;
+let initFromStoragePromise: Promise<void> | null = null;
 let parishSearchFuse: Fuse<ParishSearchDocument> | null = null;
+
+const GZ_PREFIX = 'gz:';
 
 function canUseStorage() {
   return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
 }
+
+// --- gzip helpers (CompressionStream available iOS 16.4+, Chrome 80+) ---
+
+async function compressToStorage(json: string): Promise<string> {
+  if (typeof CompressionStream === 'undefined') return json;
+  try {
+    const cs = new CompressionStream('gzip');
+    const writer = cs.writable.getWriter();
+    writer.write(new TextEncoder().encode(json));
+    writer.close();
+    const buf = await new Response(cs.readable).arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 8192) {
+      binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + 8192, bytes.length)));
+    }
+    return GZ_PREFIX + btoa(binary);
+  } catch {
+    return json; // fallback: store uncompressed
+  }
+}
+
+async function decompressFromStorage(raw: string): Promise<string> {
+  if (!raw.startsWith(GZ_PREFIX)) return raw; // plain JSON
+  if (typeof DecompressionStream === 'undefined') return ''; // can't decompress
+  try {
+    const binary = atob(raw.slice(GZ_PREFIX.length));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const ds = new DecompressionStream('gzip');
+    const writer = ds.writable.getWriter();
+    writer.write(bytes);
+    writer.close();
+    return await new Response(ds.readable).text();
+  } catch {
+    return '';
+  }
+}
+
+// --- storage helpers ---
 
 function buildSyncState(
   snapshot: OfflineSnapshot | null,
@@ -130,25 +173,28 @@ function buildSyncState(
   };
 }
 
-function loadSnapshotFromStorage(): OfflineSnapshot | null {
-  if (inMemorySnapshot) return inMemorySnapshot;
-  if (!canUseStorage()) return null;
+// Async init: decompress from localStorage into inMemorySnapshot (runs once per session)
+async function initFromStorage(): Promise<void> {
+  if (inMemorySnapshot || !canUseStorage()) return;
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return null;
-
+  if (!raw) return;
   try {
-    const parsed = JSON.parse(raw) as OfflineSnapshot;
+    const json = await decompressFromStorage(raw);
+    if (!json) { localStorage.removeItem(STORAGE_KEY); return; }
+    const parsed = JSON.parse(json) as OfflineSnapshot;
+    if (!parsed?.version) return;
     inMemorySnapshot = parsed;
-    return parsed;
-  } catch (error) {
-    console.warn('Failed to parse offline snapshot:', error);
+  } catch {
     localStorage.removeItem(STORAGE_KEY);
-    return null;
   }
 }
 
-function saveSnapshot(payload: OfflineSnapshotPayload) {
-  if (!canUseStorage()) return;
+// loadSnapshotFromStorage: sync fast-path via inMemorySnapshot (populated by initFromStorage)
+function loadSnapshotFromStorage(): OfflineSnapshot | null {
+  return inMemorySnapshot;
+}
+
+async function saveSnapshot(payload: OfflineSnapshotPayload): Promise<void> {
   const snapshot: OfflineSnapshot = {
     version: payload.version,
     updatedAt: payload.updated_at,
@@ -161,16 +207,18 @@ function saveSnapshot(payload: OfflineSnapshotPayload) {
     priests: payload.data.priests ?? [],
     photos: payload.data.photos ?? [],
   };
-  const json = JSON.stringify(snapshot);
-  try {
-    localStorage.setItem(STORAGE_KEY, json);
-  } catch {
-    // QuotaExceededError: remove old snapshot to free space, then retry
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.setItem(STORAGE_KEY, json);
-  }
   inMemorySnapshot = snapshot;
   parishSearchFuse = null;
+
+  if (!canUseStorage()) return;
+  try {
+    const toStore = await compressToStorage(JSON.stringify(snapshot));
+    localStorage.removeItem(STORAGE_KEY); // free space before writing
+    localStorage.setItem(STORAGE_KEY, toStore);
+  } catch {
+    // QuotaExceededError even after compression: data lives in memory only this session
+    console.warn('localStorage full — snapshot kept in memory only');
+  }
 }
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
@@ -196,6 +244,10 @@ export async function ensureOfflineDataFresh(force = false): Promise<OfflineSync
   if (inflightSync && !force) return inflightSync;
 
   inflightSync = (async () => {
+    // Decompress + load from localStorage on first call
+    if (!initFromStoragePromise) initFromStoragePromise = initFromStorage();
+    await initFromStoragePromise;
+
     const snapshot = loadSnapshotFromStorage();
 
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -206,7 +258,7 @@ export async function ensureOfflineDataFresh(force = false): Promise<OfflineSync
       const versionInfo = await fetchJson<{ version: number; updated_at: string }>(SYNC_VERSION_URL, { cache: 'no-store' });
       if (!snapshot || force || versionInfo.version > snapshot.version) {
         const payload = await fetchDownloadPayload(versionInfo.version);
-        saveSnapshot(payload);
+        await saveSnapshot(payload);
         return buildSyncState(inMemorySnapshot, { source: 'remote', isStale: false });
       }
       return buildSyncState(snapshot, { source: 'cache', isStale: false });
@@ -233,6 +285,13 @@ export async function ensureOfflineDataFresh(force = false): Promise<OfflineSync
 
 export function getOfflineSyncState(): OfflineSyncState {
   return buildSyncState(loadSnapshotFromStorage());
+}
+
+export function clearSnapshotCache(): void {
+  inMemorySnapshot = null;
+  initFromStoragePromise = null;
+  parishSearchFuse = null;
+  if (canUseStorage()) localStorage.removeItem(STORAGE_KEY);
 }
 
 function requireSnapshot() {
