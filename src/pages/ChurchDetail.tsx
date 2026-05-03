@@ -25,8 +25,7 @@ import { getLiturgyDisplayTitle, getMassDisplayTitle, getMassSection, shouldShow
 import { useFavorites } from '@/lib/useFavorites';
 import { triggerBrowserGate } from '@/lib/browserGate';
 
-const FALLBACK_CHURCH_IMAGE =
-  'https://images.unsplash.com/photo-1548625361-ec846e2e92c2?auto=format&fit=crop&q=80&w=1200';
+const FALLBACK_CHURCH_IMAGE = '/placeholder.png';
 const OPEN_FREE_MAP_LIBERTY_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 const WISH_SLOT_META = [
   { slot: 1 as const, title: '為自己', category: 'self' as const },
