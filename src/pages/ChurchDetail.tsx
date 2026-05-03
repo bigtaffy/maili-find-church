@@ -204,6 +204,25 @@ export function ChurchDetail() {
 
   const mapAppOptions = useMemo(() => (church ? getMapAppOptions(church) : []), [church]);
 
+  // Photo slideshow — hooks must be before any early return
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const [photoVisible, setPhotoVisible] = useState(true);
+  const photoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const photoCount = church?.photos?.length ?? 0;
+
+  useEffect(() => {
+    if (photoCount <= 1) return;
+    const tick = () => {
+      setPhotoVisible(false);
+      photoTimerRef.current = setTimeout(() => {
+        setPhotoIndex((i) => (i + 1) % photoCount);
+        setPhotoVisible(true);
+      }, 600);
+    };
+    const interval = setInterval(tick, 2600);
+    return () => { clearInterval(interval); if (photoTimerRef.current) clearTimeout(photoTimerRef.current); };
+  }, [photoCount]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -225,22 +244,6 @@ export function ChurchDetail() {
 
   const isFav = isFavorite(church.id);
   const photos = church.photos?.length ? church.photos : [{ image_url: FALLBACK_CHURCH_IMAGE, description: null }];
-  const [photoIndex, setPhotoIndex] = useState(0);
-  const [photoVisible, setPhotoVisible] = useState(true);
-  const photoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (photos.length <= 1) return;
-    const tick = () => {
-      setPhotoVisible(false);
-      photoTimerRef.current = setTimeout(() => {
-        setPhotoIndex((i) => (i + 1) % photos.length);
-        setPhotoVisible(true);
-      }, 600); // fade-out duration
-    };
-    const interval = setInterval(tick, 2600); // 2s visible + 0.6s fade
-    return () => { clearInterval(interval); if (photoTimerRef.current) clearTimeout(photoTimerRef.current); };
-  }, [photos.length]);
   const sundayMasses = sortMassTimes(church.mass_times?.filter((m) => getMassSection(m) === 'sunday') || []);
   const weekdayMasses = sortMassTimes(church.mass_times?.filter((m) => getMassSection(m) === 'weekday') || []);
   const specialMasses = sortMassTimes(church.mass_times?.filter((m) => getMassSection(m) === 'special') || []);
