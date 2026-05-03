@@ -161,7 +161,14 @@ function saveSnapshot(payload: OfflineSnapshotPayload) {
     priests: payload.data.priests ?? [],
     photos: payload.data.photos ?? [],
   };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  const json = JSON.stringify(snapshot);
+  try {
+    localStorage.setItem(STORAGE_KEY, json);
+  } catch {
+    // QuotaExceededError: remove old snapshot to free space, then retry
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.setItem(STORAGE_KEY, json);
+  }
   inMemorySnapshot = snapshot;
   parishSearchFuse = null;
 }
