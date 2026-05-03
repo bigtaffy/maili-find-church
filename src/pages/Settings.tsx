@@ -105,6 +105,24 @@ export function Settings() {
         </div>
 
         <div className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-100">
+          <h2 className="text-base font-semibold text-slate-900 mb-1">快取空間</h2>
+          <p className="text-sm text-slate-500 mb-4">清除本地教堂快取，下次開啟將重新下載資料。</p>
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.removeItem(SNAPSHOT_KEY);
+              setLocalVersion(null);
+              setSyncMessage(null);
+              setSyncStatus('idle');
+              setDebugLines([]);
+            }}
+            className="rounded-2xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-800 active:bg-slate-200 w-full"
+          >
+            清除教堂資料快取
+          </button>
+        </div>
+
+        <div className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-100">
           <h2 className="text-base font-semibold text-slate-900 mb-1">到訪記錄與心願</h2>
           <p className="text-sm text-slate-500 mb-4">清除後無法復原，所有到訪記錄與心願卡將一併刪除。</p>
           <button
