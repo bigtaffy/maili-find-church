@@ -19,7 +19,7 @@ const OPEN_FREE_MAP_LIBERTY_STYLE = 'https://tiles.openfreemap.org/styles/libert
 const SHEET_HEIGHT = '74vh';
 const COLLAPSED_SHEET_VISIBLE_HEIGHT = '148px';
 const BOTTOM_NAV_OFFSET = 'calc(4rem + env(safe-area-inset-bottom, 0px))';
-const SEARCH_BAR_PADDING_TOP = 132;
+const SEARCH_BAR_PADDING_TOP = 160;
 const FOCUS_BOTTOM_PADDING = 360;
 const FOCUS_SIDE_PADDING = 56;
 const SHEET_TRANSLATE = {
@@ -645,7 +645,7 @@ export function Home() {
 
   return (
     <div className="h-full w-full relative">
-      <div className="absolute top-0 left-0 right-0 p-4 z-[1000] space-y-2">
+      <div className="absolute top-0 left-0 right-0 px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+1rem)] z-[1000] space-y-2">
         <form onSubmit={handleSearch} className="bg-white rounded-full shadow-md flex items-center px-4 py-3">
           <Search className="w-5 h-5 text-gray-400 mr-3" />
           <input
